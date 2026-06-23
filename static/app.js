@@ -6,18 +6,22 @@
 	const SETTINGS_KEY = "wzj.settings.v1";
 	const EVENTS_KEY = "wzj.events.v1";
 	const POLL_KEY = "wzj.poll.v1";
+	const ACTIVE_QR_KEY = "wzj.activeQr.v1";
+	const DISMISSED_QR_KEY = "wzj.dismissedQr.v1";
+	const ACTIVE_QR_TTL_MS = 15 * 60 * 1000;
+	const QR_CYCLE_MS = 10 * 1000;
 
 	const HELP_TEXT =
 		"快速开始\n" +
 		"1. 设置默认邮箱（用于通知）\n" +
 		"2. 设置 GPS 标签（标签名 + 坐标）\n" +
 		"3. 提交页：选择 GPS 标签 + 填 OpenID 并提交\n" +
-		"4. 保持页面打开，出现二维码签到提醒会弹窗\n" +
-		"5. 历史页可查看记录并再次打开二维码\n\n" +
+		"4. 当前存在 OpenID 时会自动轮询，出现二维码签到会显示在主页二维码区域\n" +
+		"5. 历史页可查看记录并再次打开二维码页面\n\n" +
 		"注意\n" +
 		"- 主页统计基于本机浏览器历史，不会同步服务器\n" +
 		"- 二维码签到（扫码）与 GPS 签到互不影响\n" +
-		"- 二维码弹窗可能被浏览器拦截，可在历史页再次打开\n";
+		"- 二维码不会再弹窗或自动打开新页面\n";
 
 	// ===== modal =====
 	const modal = $id("modal");
@@ -211,6 +215,128 @@
 		saveEvents(events);
 	}
 
+	function normalizeActiveQr(input) {
+		if (!input || typeof input !== "object") return null;
+		const url = String(input.url || "").trim();
+		const openId = String(input.openId || "").trim();
+		const signId = String(input.signId || "").trim();
+		const courseId = String(input.courseId || "").trim();
+		const ts = Number(input.ts || 0);
+		if (!url || !signId || !Number.isFinite(ts) || ts <= 0) return null;
+		return { url, openId, signId, courseId, ts };
+	}
+
+	function loadActiveQr() {
+		try {
+			return normalizeActiveQr(JSON.parse(localStorage.getItem(ACTIVE_QR_KEY) || "null"));
+		} catch {
+			return null;
+		}
+	}
+
+	function saveActiveQr(activeQr) {
+		const normalized = normalizeActiveQr(activeQr);
+		if (!normalized) return null;
+		try {
+			localStorage.setItem(ACTIVE_QR_KEY, JSON.stringify(normalized));
+		} catch {
+			// ignore
+		}
+		return normalized;
+	}
+
+	function latestQrDismissKey(evt) {
+		if (!evt || evt.type !== "qr") return "";
+		const signId = String(evt.signId || "").trim();
+		const courseId = String(evt.courseId || "").trim();
+		const ts = Number(evt.ts || 0);
+		if (!signId || !Number.isFinite(ts) || ts <= 0) return "";
+		return `${courseId}:${signId}:${ts}`;
+	}
+
+	function loadDismissedQrKey() {
+		try {
+			return String(localStorage.getItem(DISMISSED_QR_KEY) || "");
+		} catch {
+			return "";
+		}
+	}
+
+	function saveDismissedQrKey(key) {
+		try {
+			if (key) localStorage.setItem(DISMISSED_QR_KEY, key);
+			else localStorage.removeItem(DISMISSED_QR_KEY);
+		} catch {
+			// ignore
+		}
+	}
+
+	function clearActiveQr() {
+		const latest = getLatestSignEvent();
+		try {
+			localStorage.removeItem(ACTIVE_QR_KEY);
+		} catch {
+			// ignore
+		}
+		saveDismissedQrKey(latestQrDismissKey(latest));
+		homeQrLastUrl = "";
+		homeQrTriedFallback = false;
+		homeQrCycleStartAt = 0;
+		homeQrLastCycleIndex = 0;
+		homeQrWsStartedKey = "";
+		stopHomeQrFetchLoop();
+		renderHomeQr();
+	}
+
+	function isActiveQrExpired(activeQr) {
+		if (!activeQr || !activeQr.ts) return true;
+		return Date.now() - Number(activeQr.ts) > ACTIVE_QR_TTL_MS;
+	}
+
+	function getLatestSignEvent() {
+		const events = loadEvents();
+		return (
+			events
+				.filter(
+					(e) =>
+						e &&
+						(e.type === "qr" || e.type === "signin") &&
+						Number.isFinite(Number(e.ts)) &&
+						Number(e.ts) > 0
+				)
+				.sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0))[0] || null
+		);
+	}
+
+	function signEventLabel(evt) {
+		if (!evt) return "--";
+		if (evt.type === "qr") return "二维码签到";
+		if (evt.type === "signin") {
+			const mode = String(evt.mode || "");
+			if (mode === "gps") return "GPS 签到成功";
+			return "普通签到成功";
+		}
+		return "签到事件";
+	}
+
+	function signEventCourse(evt) {
+		if (!evt) return "--";
+		const courseName = String(evt.courseName || "").trim();
+		const courseId = evt.courseId != null ? String(evt.courseId).trim() : "";
+		if (courseName && courseId) return `${courseName} / C${courseId}`;
+		if (courseName) return courseName;
+		if (courseId) return `C${courseId}`;
+		return "--";
+	}
+
+	function signEventRank(evt) {
+		if (!evt || evt.type !== "signin") return "--";
+		if (evt.studentRank != null && evt.signRank != null) {
+			return `签到No.${String(evt.signRank)} / 第 ${String(evt.studentRank)} 个`;
+		}
+		return "--";
+	}
+
 	function formatTime(ts) {
 		const d = new Date(ts);
 		return d.toLocaleString("zh-CN", { hour12: false });
@@ -252,6 +378,13 @@
 	let monitoredOpenIds = [];
 	let monitoredIndex = 0;
 	let pendingQrLastShownByOpenId = Object.create(null);
+	let homeQrFetchTimer = null;
+	let homeQrCountdownTimer = null;
+	let homeQrLastUrl = "";
+	let homeQrTriedFallback = false;
+	let homeQrCycleStartAt = 0;
+	let homeQrLastCycleIndex = 0;
+	let homeQrWsStartedKey = "";
 
 	const monitorCount = $id("monitorCount");
 	const pollHint = $id("pollHint");
@@ -266,6 +399,8 @@
 				: [];
 			monitoredOpenIds = list;
 			if (monitorCount) monitorCount.textContent = String(list.length);
+			const homeQrMonitorCount = $id("homeQrMonitorCount");
+			if (homeQrMonitorCount) homeQrMonitorCount.textContent = String(list.length);
 			return list;
 		} catch {
 			return [];
@@ -292,14 +427,17 @@
 	}
 
 	function setPollHint() {
-		if (!pollHint) return;
 		const st = loadPollState();
 		if (!st.enabled) {
-			pollHint.textContent = "当前未轮询二维码。";
+			if (pollHint) pollHint.textContent = "当前未轮询二维码。";
+			const homeQrPollHint = $id("homeQrPollHint");
+			if (homeQrPollHint) homeQrPollHint.textContent = "当前未轮询二维码。";
 			return;
 		}
 		const n = Array.isArray(monitoredOpenIds) ? monitoredOpenIds.length : 0;
-		pollHint.textContent = `正在轮询二维码：${n} 个 OpenID`;
+		if (pollHint) pollHint.textContent = `正在轮询二维码：${n} 个 OpenID`;
+		const homeQrPollHint = $id("homeQrPollHint");
+		if (homeQrPollHint) homeQrPollHint.textContent = `正在轮询二维码：${n} 个 OpenID`;
 	}
 
 	function stopPendingQrPoll() {
@@ -309,6 +447,281 @@
 		}
 		savePollState(false);
 		setPollHint();
+	}
+
+	function getHomeQrEls() {
+		const panel = $id("homeQrPanel");
+		if (!panel) return null;
+		return {
+			panel,
+			status: $id("homeQrStatus"),
+			spinner: $id("homeQrSpinner"),
+				empty: $id("homeQrEmpty"),
+				image: $id("homeQrImage"),
+				type: $id("homeLastSignType"),
+				time: $id("homeLastSignTime"),
+				course: $id("homeLastSignCourse"),
+				rank: $id("homeLastSignRank"),
+				openId: $id("homeQrOpenId"),
+				signId: $id("homeQrSignId"),
+				courseId: $id("homeQrCourseId"),
+			countdown: $id("homeQrCountdown"),
+			progress: $id("homeQrProgressBar"),
+			link: $id("homeQrLink"),
+			refreshBtn: $id("homeQrRefreshBtn"),
+			copyBtn: $id("homeQrCopyBtn"),
+			clearBtn: $id("homeQrClearBtn"),
+		};
+	}
+
+	function stopHomeQrFetchLoop() {
+		if (homeQrFetchTimer) {
+			clearInterval(homeQrFetchTimer);
+			homeQrFetchTimer = null;
+		}
+		if (homeQrCountdownTimer) {
+			clearInterval(homeQrCountdownTimer);
+			homeQrCountdownTimer = null;
+		}
+	}
+
+	function setHomeQrStatus(message) {
+		const els = getHomeQrEls();
+		if (els && els.status) els.status.textContent = message;
+	}
+
+	function setHomeQrStage(mode, message) {
+		const els = getHomeQrEls();
+		if (!els) return;
+		if (els.spinner) els.spinner.style.display = mode === "loading" ? "block" : "none";
+		if (els.empty) {
+			els.empty.style.display = mode === "empty" ? "grid" : "none";
+			if (message) els.empty.textContent = message;
+		}
+		if (els.image) els.image.style.display = mode === "image" ? "block" : "none";
+	}
+
+	function renderHomeQrMeta(activeQr) {
+		const els = getHomeQrEls();
+		if (!els) return;
+		const latest = getLatestSignEvent();
+		const active = activeQr || null;
+		const source = latest || active || {};
+		const latestIsQr = latest && latest.type === "qr";
+		const openId = String(source.openId || "").trim();
+		const signId = source.signId != null ? String(source.signId).trim() : "";
+		const courseId = source.courseId != null ? String(source.courseId).trim() : "";
+
+		if (els.type) els.type.textContent = latest ? signEventLabel(latest) : "--";
+		if (els.time) els.time.textContent = latest && latest.ts ? formatTime(latest.ts) : "--";
+		if (els.course) els.course.textContent = latest ? signEventCourse(latest) : "--";
+		if (els.rank) els.rank.textContent = latest ? signEventRank(latest) : "--";
+		if (els.openId) els.openId.textContent = openId || "--";
+		if (els.signId) els.signId.textContent = signId || "--";
+		if (els.courseId) els.courseId.textContent = courseId || "--";
+		if (els.link) {
+			if (latestIsQr && active && !isActiveQrExpired(active)) {
+				els.link.textContent = homeQrLastUrl || active.url || "（二维码链接会显示在这里）";
+			} else if (latest) {
+				els.link.textContent = "（最近一次不是有效二维码签到，二维码位置保留为空）";
+			} else {
+				els.link.textContent = "（二维码链接会显示在这里）";
+			}
+		}
+		if (els.countdown && (!latestIsQr || !active || isActiveQrExpired(active))) {
+			els.countdown.textContent = "--";
+		}
+		if (els.progress && (!latestIsQr || !active || isActiveQrExpired(active))) {
+			els.progress.style.width = "0%";
+		}
+	}
+
+	function renderHomeQrCode(qrUrl) {
+		const els = getHomeQrEls();
+		if (!els || !els.image) return;
+		homeQrLastUrl = qrUrl;
+		homeQrTriedFallback = false;
+		els.image.dataset.mode = "direct";
+		els.image.src = qrUrl;
+		setHomeQrStage("image");
+		renderHomeQrMeta(loadActiveQr());
+	}
+
+	async function ensureHomeQrWs(activeQr) {
+		if (!activeQr || !activeQr.courseId || !activeQr.signId) return;
+		const key = `${activeQr.courseId}:${activeQr.signId}`;
+		if (homeQrWsStartedKey === key) return;
+		homeQrWsStartedKey = key;
+		try {
+			await fetch(
+				"/qrws/start?courseId=" +
+					encodeURIComponent(activeQr.courseId) +
+					"&signId=" +
+					encodeURIComponent(activeQr.signId),
+				{ method: "GET", cache: "no-store" }
+			);
+		} catch {
+			// ignore
+		}
+	}
+
+	async function fetchHomeQrCode({ forceHint } = { forceHint: false }) {
+		const latest = getLatestSignEvent();
+		if (!latest || latest.type !== "qr") {
+			renderHomeQr();
+			return;
+		}
+		const active = loadActiveQr();
+		if (!active) {
+			renderHomeQr();
+			return;
+		}
+		if (isActiveQrExpired(active)) {
+			stopHomeQrFetchLoop();
+			renderHomeQr();
+			return;
+		}
+
+		await ensureHomeQrWs(active);
+		try {
+			const resp = await fetch("/qr/" + encodeURIComponent(active.signId), {
+				method: "GET",
+				cache: "no-store",
+			});
+			const data = await safeReadJson(resp);
+			const qrUrl = data && data.qrUrl ? String(data.qrUrl) : "";
+
+			if (!qrUrl) {
+				if (forceHint || !homeQrLastUrl) {
+					setHomeQrStatus("正在等待二维码生成（自动刷新中）");
+					setHomeQrStage("loading");
+				}
+				return;
+			}
+
+			if (qrUrl !== homeQrLastUrl) {
+				renderHomeQrCode(qrUrl);
+				homeQrCycleStartAt = Date.now();
+				homeQrLastCycleIndex = 0;
+				setHomeQrStatus("二维码已更新，请使用微信扫一扫完成签到");
+			} else {
+				if (!homeQrCycleStartAt) {
+					homeQrCycleStartAt = Date.now();
+					homeQrLastCycleIndex = 0;
+				}
+				setHomeQrStatus("二维码有效期内（自动刷新中）");
+			}
+		} catch {
+			setHomeQrStatus("获取二维码失败，请检查网络或后端日志");
+		}
+	}
+
+	function tickHomeQrCountdown() {
+		const els = getHomeQrEls();
+		if (!els) return;
+		const latest = getLatestSignEvent();
+		const active = loadActiveQr();
+		if (!latest || latest.type !== "qr" || !active || isActiveQrExpired(active)) {
+			if (els.countdown) els.countdown.textContent = "--";
+			if (els.progress) els.progress.style.width = "0%";
+			if (latest && latest.type === "qr" && active && isActiveQrExpired(active)) renderHomeQr();
+			return;
+		}
+		if (!homeQrCycleStartAt) {
+			if (els.countdown) els.countdown.textContent = "--";
+			if (els.progress) els.progress.style.width = "0%";
+			return;
+		}
+
+		const elapsed = Math.max(0, Date.now() - homeQrCycleStartAt);
+		const cycleIndex = Math.floor(elapsed / QR_CYCLE_MS);
+		if (cycleIndex !== homeQrLastCycleIndex) {
+			homeQrLastCycleIndex = cycleIndex;
+			fetchHomeQrCode({ forceHint: false });
+		}
+
+		const inCycleElapsed = elapsed % QR_CYCLE_MS;
+		const left = QR_CYCLE_MS - inCycleElapsed;
+		if (els.countdown) els.countdown.textContent = (left / 1000).toFixed(1) + "s";
+		if (els.progress) els.progress.style.width = ((left / QR_CYCLE_MS) * 100).toFixed(2) + "%";
+		if (cycleIndex >= 1) setHomeQrStatus("正在等待新二维码（自动刷新中）");
+	}
+
+	function startHomeQrFetchLoop() {
+		const els = getHomeQrEls();
+		if (!els) return;
+		stopHomeQrFetchLoop();
+
+		const latest = getLatestSignEvent();
+		const active = loadActiveQr();
+		if (!latest || latest.type !== "qr" || !active || isActiveQrExpired(active)) {
+			renderHomeQr();
+			return;
+		}
+
+		homeQrLastUrl = "";
+		homeQrCycleStartAt = 0;
+		homeQrLastCycleIndex = 0;
+		setHomeQrStatus("正在等待二维码生成（自动刷新中）");
+		setHomeQrStage("loading");
+		fetchHomeQrCode({ forceHint: true });
+		homeQrFetchTimer = setInterval(fetchHomeQrCode, 400);
+		homeQrCountdownTimer = setInterval(tickHomeQrCountdown, 100);
+	}
+
+	function renderHomeQr() {
+		const els = getHomeQrEls();
+		if (!els) return;
+
+		const latest = getLatestSignEvent();
+		let active = loadActiveQr();
+		if (
+			latest &&
+			latest.type === "qr" &&
+			latestQrDismissKey(latest) !== loadDismissedQrKey() &&
+			(!active || Number(active.ts || 0) < Number(latest.ts || 0))
+		) {
+			active = saveActiveQr({
+				url: String(latest.url || ""),
+				openId: String(latest.openId || ""),
+				signId: latest.signId != null ? String(latest.signId) : "",
+				courseId: latest.courseId != null ? String(latest.courseId) : "",
+				ts: Number(latest.ts || Date.now()),
+			});
+		}
+		renderHomeQrMeta(active);
+
+		if (!latest) {
+			stopHomeQrFetchLoop();
+			setHomeQrStage("empty", "暂无签到记录");
+			setHomeQrStatus("等待最近一次签到");
+			return;
+		}
+		if (latest.type !== "qr") {
+			stopHomeQrFetchLoop();
+			setHomeQrStage("empty", "本次不是二维码签到");
+			setHomeQrStatus(signEventLabel(latest));
+			return;
+		}
+		if (latestQrDismissKey(latest) === loadDismissedQrKey()) {
+			stopHomeQrFetchLoop();
+			setHomeQrStage("empty", "二维码已清空");
+			setHomeQrStatus("等待下一次二维码签到");
+			return;
+		}
+		if (!active) {
+			stopHomeQrFetchLoop();
+			setHomeQrStage("empty", "暂无二维码");
+			setHomeQrStatus("等待二维码链接");
+			return;
+		}
+		if (isActiveQrExpired(active)) {
+			stopHomeQrFetchLoop();
+			setHomeQrStage("empty", "二维码已过期");
+			setHomeQrStatus("最近一次二维码签到已过期，可清空或等待下一次签到");
+			return;
+		}
+		startHomeQrFetchLoop();
 	}
 
 	async function startPendingQrPollAll() {
@@ -349,36 +762,16 @@
 						if (data) {
 							const url = data.url ? String(data.url) : "";
 							const signId = data.signId ? String(data.signId) : "";
+							const courseId = data.courseId ? String(data.courseId) : "";
 							if (url) {
 								const last = pendingQrLastShownByOpenId[openId] || "";
-								if (url !== last) {
-									pendingQrLastShownByOpenId[openId] = url;
-									addEvent({ type: "qr", url, signId, openId });
-
-									// 尝试自动打开新标签页（可能会被浏览器拦截）
-									let opened = false;
-									try {
-										const w = window.open(url, "_blank", "noopener,noreferrer");
-										opened = !!w;
-									} catch {
-										opened = false;
-									}
-
-									if (modalActionBtn) {
-										modalActionBtn.style.display = "inline-flex";
-										modalActionBtn.textContent = "打开二维码页面";
-										modalActionBtn.onclick = () =>
-											window.open(url, "_blank", "noopener,noreferrer");
-									}
-
-									const tip =
-										"检测到二维码签到，需要手动用微信扫一扫完成。\n" +
-										(openId ? "openid：" + openId + "\n" : "") +
-										(signId ? "signId：" + signId + "\n" : "") +
-										"点击『打开二维码页面』即可查看二维码。\n" +
-										(!opened ? "（若未自动打开新页面，可能被浏览器拦截弹窗）" : "");
-
-									openModal(tip);
+									if (url !== last) {
+										pendingQrLastShownByOpenId[openId] = url;
+										saveDismissedQrKey("");
+										saveActiveQr({ url, openId, signId, courseId, ts: Date.now() });
+										addEvent({ type: "qr", url, signId, courseId, openId });
+										renderHomeStats();
+									renderHomeQr();
 								}
 							}
 						}
@@ -393,20 +786,22 @@
 					});
 					if (resp.ok) {
 						const data = await safeReadJson(resp);
-						if (data && data.ok && data.type) {
-							addEvent({
-								type: String(data.type),
+							if (data && data.ok && data.type) {
+								addEvent({
+									type: String(data.type),
 								mode: data.mode ? String(data.mode) : "",
 								openId: data.openId ? String(data.openId) : openId,
 								courseId: data.courseId,
 								signId: data.signId,
 								courseName: data.courseName ? String(data.courseName) : "",
 								studentRank: data.studentRank,
-								signRank: data.signRank,
-							});
+									signRank: data.signRank,
+								});
+								renderHomeStats();
+								renderHomeQr();
+							}
 						}
 					}
-				}
 
 				// 如果在历史页，顺便刷新
 				if ($id("eventList")) renderEvents();
@@ -489,6 +884,47 @@
 		});
 	}
 
+	function getFirstGpsLabel(settings) {
+		const labels = Array.isArray(settings && settings.gpsLabels) ? settings.gpsLabels : [];
+		for (const it of labels) {
+			const label = it && it.label ? String(it.label).trim() : "";
+			const location = it && it.location ? normalizeLocation(it.location) : "";
+			if (label && location) return { label, location };
+		}
+		return null;
+	}
+
+	function setHomeQuickStatus(type, text) {
+		const statusText = $id("homeQuickStatusText");
+		const statusDot = $id("homeQuickStatusDot");
+		if (statusText) statusText.textContent = text;
+		if (!statusDot) return;
+		statusDot.classList.remove("ok", "bad");
+		if (type === "ok") statusDot.classList.add("ok");
+		if (type === "bad") statusDot.classList.add("bad");
+	}
+
+	function renderHomeQuickSubmit() {
+		const gpsHint = $id("homeQuickGpsHint");
+		const emailHint = $id("homeQuickEmailHint");
+		if (!gpsHint && !emailHint) return;
+
+		const settings = loadSettings();
+		const email = String(settings.defaultEmail || "").trim();
+		const firstGps = getFirstGpsLabel(settings);
+
+		if (gpsHint) {
+			gpsHint.textContent = firstGps
+				? `默认 GPS：${firstGps.label} · ${firstGps.location}`
+				: "默认 GPS：未配置，请先到设置页添加至少一个 GPS 标签";
+		}
+		if (emailHint) {
+			emailHint.textContent = email
+				? `默认邮箱：${email}`
+				: "默认邮箱：未配置，请先到设置页保存默认邮箱";
+		}
+	}
+
 	function setHelpText() {
 		const noticeBox = $id("noticeBox");
 		const quickNoticeBtn = $id("quickNoticeBtn");
@@ -498,9 +934,9 @@
 				"2）到【设置】添加 GPS 标签（标签名 + 经纬度 lng,lat）<br />" +
 				"3）到【提交】粘贴 OpenID/链接，选择 GPS 标签，点击提交<br />" +
 				"说明：二维码签到（扫码）与 GPS 签到互不影响<br />" +
-				"4）提交后会加入监控池；保持页面打开即可接收二维码弹窗<br />" +
-				"5）到【历史】可开始/停止轮询，查看记录，并可再次打开二维码<br /><br />" +
-				"提示：二维码弹窗可能被浏览器拦截，拦截后可去【历史】再次打开。";
+				"4）提交后会加入监控池；保持主页打开即可在二维码区域接收提醒<br />" +
+				"5）到【历史】可开始/停止轮询，查看记录，并可再次打开二维码页面<br /><br />" +
+				"提示：二维码签到会显示在主页右侧区域，不再弹窗或自动打开新页面。";
 		}
 		if (quickNoticeBtn) quickNoticeBtn.textContent = "使用说明";
 	}
@@ -588,12 +1024,13 @@
 			if (e.type === "qr") {
 				const url = String(e.url || "");
 				const signId = String(e.signId || "");
+				const courseId = String(e.courseId || "");
 				const openId = String(e.openId || "");
 				card.innerHTML = `
 					<div style="display:flex;justify-content:space-between;gap:10px;align-items:center">
 						<div>
 							<div style="font-weight:800">二维码签到提醒</div>
-							<div class="hint" style="margin-top:4px">${when}${signId ? ` · signId: <span class="mono">${signId}</span>` : ""}</div>
+							<div class="hint" style="margin-top:4px">${when}${signId ? ` · signId: <span class="mono">${signId}</span>` : ""}${courseId ? ` · courseId: <span class="mono">${courseId}</span>` : ""}</div>
 						</div>
 						<button class="pill primary" type="button">再次打开</button>
 					</div>
@@ -753,6 +1190,191 @@
 				submitBtn.textContent = "提交";
 			}
 		});
+	}
+
+	function wireHomeQuickSubmit() {
+		const form = $id("homeQuickSubmitForm");
+		const openIdField = $id("homeQuickOpenId");
+		const submitBtn = $id("homeQuickSubmitBtn");
+		if (!form || !openIdField || !submitBtn) return;
+
+		openIdField.addEventListener("paste", (e) => {
+			const text = (e.clipboardData || window.clipboardData)?.getData("text") || "";
+			const parsed = parseOpenIdFromText(text);
+			if (parsed && parsed !== String(text || "").trim()) {
+				e.preventDefault();
+				openIdField.value = parsed;
+				openIdField.dispatchEvent(new Event("input", { bubbles: true }));
+			}
+		});
+
+		openIdField.addEventListener("blur", () => {
+			openIdField.value = parseOpenIdFromText(openIdField.value);
+		});
+
+		form.addEventListener("submit", async (event) => {
+			event.preventDefault();
+
+			const openId = parseOpenIdFromText(openIdField.value);
+			openIdField.value = openId;
+
+			const settings = loadSettings();
+			const email = String(settings.defaultEmail || "").trim();
+			const firstGps = getFirstGpsLabel(settings);
+
+			if (openId.length !== 32) {
+				setHomeQuickStatus("bad", "OpenID 无效");
+				openModal("OpenID 必须为 32 位，请检查后再提交。");
+				return;
+			}
+
+			if (!email) {
+				setHomeQuickStatus("bad", "缺少邮箱");
+				openModal("请先到“设置”页保存默认邮箱，再使用首页快速提交。");
+				return;
+			}
+
+			if (!firstGps) {
+				setHomeQuickStatus("bad", "缺少 GPS");
+				openModal("请先到“设置”页添加至少一个 GPS 标签。首页快速提交会自动使用第一个 GPS 标签。");
+				return;
+			}
+
+			const payload = { openId, value: email, location: firstGps.location };
+
+			submitBtn.disabled = true;
+			submitBtn.textContent = "提交中...";
+			setHomeQuickStatus("", "提交中…");
+
+			try {
+				const resp = await fetch("/register", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify(payload),
+				});
+				const data = await safeReadJson(resp);
+				const msg =
+					(data && (data.message || data.error) ? String(data.message || data.error) : "") ||
+					(resp.ok
+						? "提交完成，但服务器未返回明确消息，请检查后端日志。"
+						: "提交失败，请检查后端日志。");
+				const serverRejected = /无效|失败|错误/.test(msg);
+
+				if (resp.ok && !serverRejected) {
+					setHomeQuickStatus("ok", "已提交");
+					rememberEmail(email);
+					rememberLastOpenId(openId);
+					addEvent({
+						type: "submit",
+						openId,
+						gpsLabel: firstGps.label,
+						location: firstGps.location,
+					});
+					openIdField.value = "";
+					await refreshMonitoredOpenIds();
+					await startPendingQrPollAll();
+					renderHomeStats();
+				} else {
+					setHomeQuickStatus("bad", "提交失败");
+				}
+
+				openModal(msg);
+			} catch (err) {
+				setHomeQuickStatus("bad", "网络错误");
+				openModal(
+					"提交失败，请检查网络或后端日志。错误信息：" +
+						(err && err.message ? err.message : String(err))
+				);
+			} finally {
+				submitBtn.disabled = false;
+				submitBtn.textContent = "快速提交";
+			}
+		});
+	}
+
+	function wireHomeQrPage() {
+		const els = getHomeQrEls();
+		if (!els) return;
+
+		const startBtn = $id("homeQrStartPollBtn");
+		const stopBtn = $id("homeQrStopPollBtn");
+
+		if (els.image) {
+			els.image.addEventListener("error", () => {
+				if (homeQrTriedFallback) return;
+				if (els.image.dataset.mode !== "direct") return;
+				if (!homeQrLastUrl) return;
+
+				homeQrTriedFallback = true;
+				els.image.dataset.mode = "encoded";
+				els.image.src =
+					"https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=" +
+					encodeURIComponent(homeQrLastUrl);
+			});
+		}
+
+		if (startBtn) {
+			startBtn.addEventListener("click", async () => {
+				await startPendingQrPollAll();
+				const list =
+					monitoredOpenIds && monitoredOpenIds.length
+						? monitoredOpenIds
+						: await refreshMonitoredOpenIds();
+				if (!list || list.length === 0) {
+					stopPendingQrPoll();
+					setHomeQrStatus("监控池为空，请先去提交页提交至少一个 OpenID");
+					openModal("监控池为空：请先去“提交”页提交至少一个 OpenID。");
+					return;
+				}
+				setHomeQrStatus("已开始轮询，等待二维码签到");
+			});
+		}
+
+		if (stopBtn) {
+			stopBtn.addEventListener("click", () => {
+				stopPendingQrPoll();
+				setHomeQrStatus("已停止轮询二维码提醒");
+			});
+		}
+
+		if (els.refreshBtn) {
+			els.refreshBtn.addEventListener("click", () => {
+				const latest = getLatestSignEvent();
+				const active = loadActiveQr();
+				if (!latest || latest.type !== "qr" || !active || isActiveQrExpired(active)) {
+					renderHomeQr();
+					setHomeQrStatus("最近一次签到没有可刷新的二维码");
+					return;
+				}
+				fetchHomeQrCode({ forceHint: true });
+			});
+		}
+
+		if (els.copyBtn) {
+			els.copyBtn.addEventListener("click", async () => {
+				const latest = getLatestSignEvent();
+				const active = loadActiveQr();
+				if (!latest || latest.type !== "qr" || !active || isActiveQrExpired(active)) {
+					setHomeQrStatus("最近一次签到没有可复制的二维码链接");
+					return;
+				}
+				const value = homeQrLastUrl || (active && active.url) || "";
+				if (!value) {
+					setHomeQrStatus("暂无可复制的二维码链接");
+					return;
+				}
+				try {
+					await navigator.clipboard.writeText(value);
+					setHomeQrStatus("已复制二维码链接");
+				} catch {
+					setHomeQrStatus("复制失败：浏览器不允许或不支持剪贴板 API");
+				}
+			});
+		}
+
+		if (els.clearBtn) {
+			els.clearBtn.addEventListener("click", clearActiveQr);
+		}
 	}
 
 	// ===== history page buttons =====
@@ -937,11 +1559,22 @@
 		}
 	}
 
+	async function initializePendingQrPolling() {
+		const list = await refreshMonitoredOpenIds();
+		if ((list && list.length > 0) || loadPollState().enabled) {
+			await startPendingQrPollAll();
+			return;
+		}
+		setPollHint();
+	}
+
 	function renderAll() {
 		renderSelectors();
 		renderSettings();
 		renderEvents();
 		renderHomeStats();
+		renderHomeQuickSubmit();
+		renderHomeQr();
 	}
 
 	function markActiveNav() {
@@ -954,17 +1587,16 @@
 	// ===== init =====
 	setHelpText();
 	markActiveNav();
-	renderAll();
 	wireSubmitPage();
+	wireHomeQuickSubmit();
+	wireHomeQrPage();
 	wireHistoryPage();
 	wireSettingsPage();
 	wireHelpButtons();
+	renderAll();
 
-	refreshMonitoredOpenIds();
 	syncFrontendSettingsFromServer().then((ok) => {
 		if (ok) renderAll();
 	});
-	const initPoll = loadPollState();
-	if (initPoll.enabled) startPendingQrPollAll();
-	else setPollHint();
+	initializePendingQrPolling();
 })();

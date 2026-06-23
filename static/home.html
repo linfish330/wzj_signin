@@ -4,7 +4,7 @@
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>主页 · 微助教 OpenID 监控</title>
-		<link rel="stylesheet" href="/static/app.css?v=20251216_01" />
+		<link rel="stylesheet" href="/static/app.css?v=20260622_06" />
 	</head>
 	<body data-page="home">
 		<div class="shell">
@@ -45,12 +45,12 @@
 								<div class="kpi">
 									<div class="label">监控状态</div>
 									<div class="value">运行中</div>
-									<div class="hint">保持页面打开可接收签到提醒（二维码弹窗）</div>
+									<div class="hint">保持页面打开可在主页接收二维码</div>
 								</div>
 								<div class="kpi">
 									<div class="label">提醒</div>
 									<div class="value">已开启</div>
-									<div class="hint">二维码签到会弹窗并可一键打开</div>
+									<div class="hint">二维码签到会直接显示在右侧区域</div>
 								</div>
 							</div>
 
@@ -83,27 +83,99 @@
 									></div>
 								</div>
 							</div>
+
+							<div class="quickSubmit" id="homeQuickSubmit">
+								<div class="quickSubmitHead">
+									<div>
+										<h2>快速填写 OpenID</h2>
+										<p class="sub">粘贴 OpenID 或包含 openid 的链接，GPS 自动使用第一个标签</p>
+									</div>
+									<span class="badge">
+										<span class="dot" id="homeQuickStatusDot"></span>
+										<span id="homeQuickStatusText">待填写</span>
+									</span>
+								</div>
+
+								<form id="homeQuickSubmitForm" class="quickSubmitForm">
+									<div class="field quickSubmitInput">
+										<label for="homeQuickOpenId">OpenID / URL</label>
+										<input id="homeQuickOpenId" type="text" placeholder="粘贴 openid 或包含 openid 的链接" autocomplete="off" />
+									</div>
+									<button class="pill primary" id="homeQuickSubmitBtn" type="submit">快速提交</button>
+								</form>
+
+								<div class="hint" id="homeQuickGpsHint">默认 GPS：读取中…</div>
+								<div class="hint" id="homeQuickEmailHint">默认邮箱：读取中…</div>
+							</div>
 						</div>
 
-						<div class="card">
-							<h2>使用说明</h2>
-							<p class="sub">整个程序的操作流程与注意事项</p>
-
-							<div class="softBlock" style="min-height: 220px; margin-top: 14px">
-								<h2 style="margin-bottom: 6px">怎么用</h2>
-								<div class="sub" id="noticeBox" style="margin-top: 0; line-height: 1.7">
-									1）到【设置】保存默认邮箱（提交时会自动使用）<br />
-									2）到【设置】添加 GPS 标签（标签名 + 经纬度 lng,lat）<br />
-									3）到【提交】粘贴 OpenID/链接，选择 GPS 标签，点击提交<br />
-									说明：二维码签到（扫码）与 GPS 签到互不影响<br />
-									4）提交后会加入监控池；保持页面打开即可接收二维码弹窗<br />
-									5）到【历史】可开始/停止轮询，查看记录，并可再次打开二维码<br /><br />
-									提示：二维码弹窗可能被浏览器拦截，拦截后可去【历史】再次打开。
+						<div class="stack">
+							<div class="card qrPanel" id="homeQrPanel">
+								<div class="qrPanelHead">
+									<div>
+										<h2>最近一次签到</h2>
+										<p class="sub">显示最近一次签到信息；若为二维码签到则显示二维码</p>
+									</div>
+									<span class="badge">监控中：<span id="homeQrMonitorCount">0</span></span>
 								</div>
+
+								<div class="qrStage" id="homeQrStage" style="margin-top: 14px">
+									<div class="spinner small" id="homeQrSpinner" aria-label="Loading"></div>
+									<div class="qrEmpty" id="homeQrEmpty">暂无二维码</div>
+									<img id="homeQrImage" class="qrPreview" alt="扫描此二维码签到" />
+								</div>
+
+								<div class="qrMeta">
+									<div>状态：<span id="homeQrStatus">保持主页打开或点击开始轮询</span></div>
+									<div>二维码剩余：<span id="homeQrCountdown">--</span></div>
+								</div>
+								<div class="progress"><div class="bar" id="homeQrProgressBar"></div></div>
+
+								<div class="qrInfoGrid">
+									<div>类型：<span class="mono" id="homeLastSignType">--</span></div>
+									<div>时间：<span class="mono" id="homeLastSignTime">--</span></div>
+									<div>课程：<span class="mono" id="homeLastSignCourse">--</span></div>
+									<div>openId：<span class="mono" id="homeQrOpenId">--</span></div>
+									<div>signId：<span class="mono" id="homeQrSignId">--</span></div>
+									<div>courseId：<span class="mono" id="homeQrCourseId">--</span></div>
+									<div>排名：<span class="mono" id="homeLastSignRank">--</span></div>
+								</div>
+								<div class="hint mono qrLinkText" id="homeQrLink">（二维码链接会显示在这里）</div>
+
+								<div class="small-actions">
+									<button class="pill primary" id="homeQrStartPollBtn" type="button">开始轮询</button>
+									<button class="pill" id="homeQrStopPollBtn" type="button">停止轮询</button>
+									<button class="ghost" id="homeQrRefreshBtn" type="button">手动刷新</button>
+									<button class="ghost" id="homeQrCopyBtn" type="button">复制二维码链接</button>
+									<button class="ghost" id="homeQrClearBtn" type="button">清空当前二维码</button>
+								</div>
+								<div class="hint" id="homeQrPollHint" style="margin-top: 10px"></div>
 							</div>
 
-							<div class="small-actions">
-								<button class="ghost" id="copyNoticeBtn" type="button">复制</button>
+							<div class="card">
+								<h2>使用说明</h2>
+								<p class="sub">整个程序的操作流程与注意事项</p>
+
+								<details class="collapsibleGuide" id="homeGuide">
+									<summary>展开查看操作流程</summary>
+
+									<div class="softBlock guideBody">
+										<h2 style="margin-bottom: 6px">怎么用</h2>
+										<div class="sub" id="noticeBox" style="margin-top: 0; line-height: 1.7">
+											1）到【设置】保存默认邮箱（提交时会自动使用）<br />
+											2）到【设置】添加 GPS 标签（标签名 + 经纬度 lng,lat）<br />
+											3）到【提交】粘贴 OpenID/链接，选择 GPS 标签，点击提交<br />
+											说明：二维码签到（扫码）与 GPS 签到互不影响<br />
+											4）提交后会加入监控池；保持主页打开即可在二维码区域接收提醒<br />
+											5）到【历史】可开始/停止轮询，查看记录，并可再次打开二维码页面<br /><br />
+											提示：二维码签到会显示在主页右侧区域，不再弹窗或自动打开新页面。
+										</div>
+									</div>
+
+									<div class="small-actions">
+										<button class="ghost" id="copyNoticeBtn" type="button">复制</button>
+									</div>
+								</details>
 							</div>
 						</div>
 					</section>
@@ -163,6 +235,6 @@
 				});
 			})();
 		</script>
-		<script src="/static/app.js?v=20251216_01"></script>
+		<script src="/static/app.js?v=20260623_02"></script>
 	</body>
 </html>
