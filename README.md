@@ -38,6 +38,30 @@ go run .
 
 - http://localhost:8080/home
 
+## 快速开始（macOS）
+
+安装一次快捷命令：
+
+```bash
+chmod +x scripts/wzj_signin
+ln -sf "$(pwd)/scripts/wzj_signin" ~/.local/bin/wzj_signin
+```
+
+以后在任意目录运行：
+
+```bash
+wzj_signin
+```
+
+该命令会检查 Redis、按需构建项目、后台启动服务并打开主页。常用管理命令：
+
+```bash
+wzj_signin status
+wzj_signin logs
+wzj_signin restart
+wzj_signin stop
+```
+
 ## Docker 运行
 
 ### 方式一：docker-compose（自带 Redis）
@@ -146,5 +170,4 @@ powershell -ExecutionPolicy Bypass -File .\scripts\run-local.ps1 -Port 8081
 ## 致谢
 
 - 上游项目：https://github.com/Azuka753/wzj_sign_public
-
 

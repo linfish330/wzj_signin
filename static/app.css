@@ -134,15 +134,18 @@ body {
 }
 
 .shell {
-	min-height: 100vh;
+	height: 100vh;
+	height: 100dvh;
 	padding: 28px;
 	display: flex;
 	justify-content: center;
 	align-items: stretch;
+	box-sizing: border-box;
 }
 
 .app {
 	width: min(1100px, 100%);
+	height: 100%;
 	background: rgba(255, 255, 255, 0.82);
 	backdrop-filter: blur(20px);
 	-webkit-backdrop-filter: blur(20px);
@@ -229,6 +232,23 @@ body {
 	box-shadow: var(--shadow-md);
 }
 
+.icon {
+	width: 20px;
+	height: 20px;
+	display: block;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 2;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	flex-shrink: 0;
+}
+
+.navbtn .icon {
+	width: 21px;
+	height: 21px;
+}
+
 .sidebar-spacer {
 	flex: 1;
 }
@@ -244,6 +264,8 @@ body {
 .main {
 	padding: 24px;
 	min-width: 0;
+	height: 100%;
+	overflow-y: auto;
 }
 
 .topbar {
@@ -287,7 +309,13 @@ body {
 	border: 1px solid var(--border);
 	border-radius: var(--radius-full);
 	background: rgba(255, 255, 255, 0.9);
+	color: var(--color-text-muted);
 	transition: all var(--transition-fast);
+}
+
+.search .icon {
+	width: 18px;
+	height: 18px;
 }
 
 .search:focus-within {
@@ -718,7 +746,7 @@ body {
 }
 
 .qrStage {
-	min-height: 260px;
+	min-height: 220px;
 	border: 1px solid var(--border);
 	border-radius: var(--radius-md);
 	background: var(--color-cream-dark);
@@ -730,7 +758,7 @@ body {
 }
 
 .qrPreview {
-	width: min(236px, 100%);
+	width: min(200px, 100%);
 	aspect-ratio: 1;
 	border-radius: var(--radius-md);
 	border: 1px solid var(--color-earth);
@@ -748,7 +776,7 @@ body {
 	padding: 22px;
 	font-size: 13px;
 	text-align: center;
-	width: min(236px, 100%);
+	width: min(200px, 100%);
 	aspect-ratio: 1;
 	display: grid;
 	place-items: center;
@@ -1036,11 +1064,11 @@ body {
 	}
 
 	.qrStage {
-		min-height: 238px;
+		min-height: 205px;
 	}
 
 	.qrPreview,
 	.qrEmpty {
-		width: min(220px, 100%);
+		width: min(190px, 100%);
 	}
 }

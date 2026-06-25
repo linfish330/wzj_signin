@@ -322,11 +322,7 @@
 	function signEventCourse(evt) {
 		if (!evt) return "--";
 		const courseName = String(evt.courseName || "").trim();
-		const courseId = evt.courseId != null ? String(evt.courseId).trim() : "";
-		if (courseName && courseId) return `${courseName} / C${courseId}`;
-		if (courseName) return courseName;
-		if (courseId) return `C${courseId}`;
-		return "--";
+		return courseName || "--";
 	}
 
 	function signEventRank(evt) {
@@ -456,20 +452,15 @@
 			panel,
 			status: $id("homeQrStatus"),
 			spinner: $id("homeQrSpinner"),
-				empty: $id("homeQrEmpty"),
-				image: $id("homeQrImage"),
-				type: $id("homeLastSignType"),
-				time: $id("homeLastSignTime"),
-				course: $id("homeLastSignCourse"),
-				rank: $id("homeLastSignRank"),
-				openId: $id("homeQrOpenId"),
-				signId: $id("homeQrSignId"),
-				courseId: $id("homeQrCourseId"),
+			empty: $id("homeQrEmpty"),
+			image: $id("homeQrImage"),
+			type: $id("homeLastSignType"),
+			time: $id("homeLastSignTime"),
+			course: $id("homeLastSignCourse"),
+			rank: $id("homeLastSignRank"),
 			countdown: $id("homeQrCountdown"),
 			progress: $id("homeQrProgressBar"),
-			link: $id("homeQrLink"),
 			refreshBtn: $id("homeQrRefreshBtn"),
-			copyBtn: $id("homeQrCopyBtn"),
 			clearBtn: $id("homeQrClearBtn"),
 		};
 	}
@@ -506,28 +497,12 @@
 		if (!els) return;
 		const latest = getLatestSignEvent();
 		const active = activeQr || null;
-		const source = latest || active || {};
 		const latestIsQr = latest && latest.type === "qr";
-		const openId = String(source.openId || "").trim();
-		const signId = source.signId != null ? String(source.signId).trim() : "";
-		const courseId = source.courseId != null ? String(source.courseId).trim() : "";
 
 		if (els.type) els.type.textContent = latest ? signEventLabel(latest) : "--";
 		if (els.time) els.time.textContent = latest && latest.ts ? formatTime(latest.ts) : "--";
 		if (els.course) els.course.textContent = latest ? signEventCourse(latest) : "--";
 		if (els.rank) els.rank.textContent = latest ? signEventRank(latest) : "--";
-		if (els.openId) els.openId.textContent = openId || "--";
-		if (els.signId) els.signId.textContent = signId || "--";
-		if (els.courseId) els.courseId.textContent = courseId || "--";
-		if (els.link) {
-			if (latestIsQr && active && !isActiveQrExpired(active)) {
-				els.link.textContent = homeQrLastUrl || active.url || "（二维码链接会显示在这里）";
-			} else if (latest) {
-				els.link.textContent = "（最近一次不是有效二维码签到，二维码位置保留为空）";
-			} else {
-				els.link.textContent = "（二维码链接会显示在这里）";
-			}
-		}
 		if (els.countdown && (!latestIsQr || !active || isActiveQrExpired(active))) {
 			els.countdown.textContent = "--";
 		}
@@ -867,7 +842,7 @@
 
 		counts.forEach((c, idx) => {
 			const bar = document.createElement("div");
-			const h = c === 0 ? 8 : Math.round((c / max) * 78);
+			const h = c === 0 ? 8 : Math.round((c / max) * 52);
 			bar.style.height = `${h}px`;
 			bar.style.borderRadius = "12px";
 			bar.style.border = "1px solid var(--border)";
@@ -1296,9 +1271,6 @@
 		const els = getHomeQrEls();
 		if (!els) return;
 
-		const startBtn = $id("homeQrStartPollBtn");
-		const stopBtn = $id("homeQrStopPollBtn");
-
 		if (els.image) {
 			els.image.addEventListener("error", () => {
 				if (homeQrTriedFallback) return;
@@ -1313,30 +1285,6 @@
 			});
 		}
 
-		if (startBtn) {
-			startBtn.addEventListener("click", async () => {
-				await startPendingQrPollAll();
-				const list =
-					monitoredOpenIds && monitoredOpenIds.length
-						? monitoredOpenIds
-						: await refreshMonitoredOpenIds();
-				if (!list || list.length === 0) {
-					stopPendingQrPoll();
-					setHomeQrStatus("监控池为空，请先去提交页提交至少一个 OpenID");
-					openModal("监控池为空：请先去“提交”页提交至少一个 OpenID。");
-					return;
-				}
-				setHomeQrStatus("已开始轮询，等待二维码签到");
-			});
-		}
-
-		if (stopBtn) {
-			stopBtn.addEventListener("click", () => {
-				stopPendingQrPoll();
-				setHomeQrStatus("已停止轮询二维码提醒");
-			});
-		}
-
 		if (els.refreshBtn) {
 			els.refreshBtn.addEventListener("click", () => {
 				const latest = getLatestSignEvent();
@@ -1347,28 +1295,6 @@
 					return;
 				}
 				fetchHomeQrCode({ forceHint: true });
-			});
-		}
-
-		if (els.copyBtn) {
-			els.copyBtn.addEventListener("click", async () => {
-				const latest = getLatestSignEvent();
-				const active = loadActiveQr();
-				if (!latest || latest.type !== "qr" || !active || isActiveQrExpired(active)) {
-					setHomeQrStatus("最近一次签到没有可复制的二维码链接");
-					return;
-				}
-				const value = homeQrLastUrl || (active && active.url) || "";
-				if (!value) {
-					setHomeQrStatus("暂无可复制的二维码链接");
-					return;
-				}
-				try {
-					await navigator.clipboard.writeText(value);
-					setHomeQrStatus("已复制二维码链接");
-				} catch {
-					setHomeQrStatus("复制失败：浏览器不允许或不支持剪贴板 API");
-				}
 			});
 		}
 

@@ -4,7 +4,7 @@
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>设置 · 微助教 OpenID 监控</title>
-		<link rel="stylesheet" href="/static/app.css?v=20260622_06" />
+		<link rel="stylesheet" href="/static/app.css?v=20260623_04" />
 	</head>
 
 	<body data-page="settings">
@@ -14,10 +14,10 @@
 					<div class="brand" title="WZJ">W</div>
 
 					<div class="nav" aria-label="Navigation">
-						<a class="navbtn" href="/home" data-page="home" title="主页">🏠</a>
-						<a class="navbtn" href="/submit" data-page="submit" title="提交">➕</a>
-						<a class="navbtn" href="/history" data-page="remind" title="历史">🕘</a>
-						<a class="navbtn" href="/settings" data-page="settings" title="设置">⚙️</a>
+						<a class="navbtn" href="/home" data-page="home" title="主页" aria-label="主页"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-home"></use></svg></a>
+						<a class="navbtn" href="/submit" data-page="submit" title="提交" aria-label="提交"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-plus"></use></svg></a>
+						<a class="navbtn" href="/history" data-page="remind" title="历史" aria-label="历史"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-clock"></use></svg></a>
+						<a class="navbtn" href="/settings" data-page="settings" title="设置" aria-label="设置"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-settings"></use></svg></a>
 					</div>
 
 					<div class="sidebar-spacer"></div>
@@ -31,7 +31,7 @@
 						</div>
 						<div class="actions">
 							<div class="search" role="search">
-								<span aria-hidden="true">🔎</span>
+								<svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-search"></use></svg>
 								<input type="text" placeholder="搜索（未启用）" autocomplete="off" aria-label="搜索" />
 							</div>
 							<a class="pill" href="/submit">去提交</a>
@@ -153,6 +153,6 @@
 			</div>
 		</div>
 
-		<script src="/static/app.js?v=20260623_02"></script>
+		<script src="/static/app.js?v=20260623_04"></script>
 	</body>
 </html>

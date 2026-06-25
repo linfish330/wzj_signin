@@ -1,0 +1,296 @@
+#!/usr/bin/env bash
+
+set -u
+
+SCRIPT_PATH="${BASH_SOURCE[0]}"
+while [[ -L "$SCRIPT_PATH" ]]; do
+  SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT_PATH")" && pwd)"
+  SCRIPT_PATH="$(readlink "$SCRIPT_PATH")"
+  [[ "$SCRIPT_PATH" == /* ]] || SCRIPT_PATH="$SCRIPT_DIR/$SCRIPT_PATH"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT_PATH")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+RUNTIME_DIR="$PROJECT_DIR/.logs"
+BINARY="$RUNTIME_DIR/wzj_signin"
+PID_FILE="$RUNTIME_DIR/wzj_signin.pid"
+LOG_FILE="$RUNTIME_DIR/wzj_signin-run.log"
+SCREEN_SESSION="wzj_signin"
+
+PORT="${PORT:-8080}"
+REDIS_ADDRESS="${REDIS_ADDRESS:-127.0.0.1:6379}"
+SERVER_ADDRESS="${SERVER_ADDRESS:-http://localhost:$PORT}"
+HOME_URL="$SERVER_ADDRESS/home"
+
+say() {
+  printf '[wzj_signin] %s\n' "$*"
+}
+
+fail() {
+  printf '[wzj_signin] 错误：%s\n' "$*" >&2
+  exit 1
+}
+
+pid_is_running() {
+  local pid="${1:-}"
+  [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null
+}
+
+saved_pid() {
+  [[ -f "$PID_FILE" ]] && tr -d '[:space:]' < "$PID_FILE"
+}
+
+service_is_ready() {
+  curl -fsS --max-time 1 "$SERVER_ADDRESS/serverinfo" >/dev/null 2>&1
+}
+
+listener_pid() {
+  lsof -nP -tiTCP:"$PORT" -sTCP:LISTEN 2>/dev/null | head -n 1
+}
+
+screen_session_exists() {
+  command -v screen >/dev/null 2>&1 &&
+    screen -ls 2>/dev/null | grep -Eq "[0-9]+\\.${SCREEN_SESSION}[[:space:]]"
+}
+
+ensure_redis() {
+  local host="${REDIS_ADDRESS%%:*}"
+  local port="${REDIS_ADDRESS##*:}"
+
+  if command -v redis-cli >/dev/null 2>&1 &&
+    [[ "$(redis-cli -h "$host" -p "$port" ping 2>/dev/null || true)" == "PONG" ]]; then
+    return
+  fi
+
+  if [[ "$REDIS_ADDRESS" == "127.0.0.1:6379" || "$REDIS_ADDRESS" == "localhost:6379" ]] &&
+    command -v brew >/dev/null 2>&1; then
+    say "Redis 尚未响应，正在通过 Homebrew 启动..."
+    brew services start redis >/dev/null
+    for _ in {1..30}; do
+      if [[ "$(redis-cli -h "$host" -p "$port" ping 2>/dev/null || true)" == "PONG" ]]; then
+        say "Redis 已就绪"
+        return
+      fi
+      sleep 0.2
+    done
+  fi
+
+  fail "无法连接 Redis：$REDIS_ADDRESS"
+}
+
+build_if_needed() {
+  local source_changed=""
+
+  command -v go >/dev/null 2>&1 || fail "未找到 Go，请先运行 brew install go"
+  mkdir -p "$RUNTIME_DIR"
+
+  if [[ -x "$BINARY" ]]; then
+    source_changed="$(find "$PROJECT_DIR" -name '*.go' -newer "$BINARY" -print -quit)"
+    if [[ -z "$source_changed" && "$PROJECT_DIR/go.mod" -ot "$BINARY" && "$PROJECT_DIR/go.sum" -ot "$BINARY" ]]; then
+      return
+    fi
+  fi
+
+  say "正在构建项目..."
+  (cd "$PROJECT_DIR" && go build -o "$BINARY" .) || fail "构建失败"
+}
+
+open_home() {
+  if [[ "${WZJ_OPEN_BROWSER:-1}" != "0" ]] && command -v open >/dev/null 2>&1; then
+    open "$HOME_URL"
+  fi
+}
+
+start_service() {
+  local pid existing_pid
+
+  mkdir -p "$RUNTIME_DIR"
+  pid="$(saved_pid || true)"
+  if pid_is_running "$pid"; then
+    say "项目已在运行（PID ${pid}）"
+    say "主页：$HOME_URL"
+    open_home
+    return
+  fi
+
+  rm -f "$PID_FILE"
+  if screen_session_exists; then
+    screen -S "$SCREEN_SESSION" -X quit >/dev/null 2>&1 || true
+  fi
+
+  if service_is_ready; then
+    existing_pid="$(listener_pid || true)"
+    [[ -n "$existing_pid" ]] && printf '%s\n' "$existing_pid" > "$PID_FILE"
+    say "项目已在运行${existing_pid:+（PID ${existing_pid}）}"
+    say "主页：$HOME_URL"
+    open_home
+    return
+  fi
+
+  existing_pid="$(listener_pid || true)"
+  [[ -z "$existing_pid" ]] || fail "端口 $PORT 已被 PID $existing_pid 占用"
+
+  ensure_redis
+  build_if_needed
+
+  say "正在后台启动..."
+  if command -v screen >/dev/null 2>&1; then
+    screen -dmS "$SCREEN_SESSION" /bin/bash -c \
+      'cd "$1" && exec env REDIS_ADDRESS="$2" PORT="$3" SERVER_ADDRESS="$4" "$5" >>"$6" 2>&1' \
+      _ "$PROJECT_DIR" "$REDIS_ADDRESS" "$PORT" "$SERVER_ADDRESS" "$BINARY" "$LOG_FILE"
+  else
+    nohup env \
+      REDIS_ADDRESS="$REDIS_ADDRESS" \
+      PORT="$PORT" \
+      SERVER_ADDRESS="$SERVER_ADDRESS" \
+      "$BINARY" >>"$LOG_FILE" 2>&1 </dev/null &
+    pid=$!
+    printf '%s\n' "$pid" > "$PID_FILE"
+  fi
+
+  for _ in {1..50}; do
+    if service_is_ready; then
+      pid="$(listener_pid || true)"
+      [[ -n "$pid" ]] && printf '%s\n' "$pid" > "$PID_FILE"
+      say "启动成功（PID ${pid}）"
+      say "主页：$HOME_URL"
+      open_home
+      return
+    fi
+    if [[ -n "${pid:-}" ]] && ! pid_is_running "$pid"; then
+      break
+    fi
+    sleep 0.2
+  done
+
+  rm -f "$PID_FILE"
+  say "最近的启动日志："
+  tail -n 30 "$LOG_FILE" 2>/dev/null || true
+  fail "服务未能正常启动"
+}
+
+stop_service() {
+  local pid
+
+  pid="$(saved_pid || true)"
+  if ! pid_is_running "$pid" && service_is_ready; then
+    pid="$(listener_pid || true)"
+  fi
+
+  if ! pid_is_running "$pid" && ! screen_session_exists; then
+    rm -f "$PID_FILE"
+    say "项目当前未运行"
+    return
+  fi
+
+  say "正在停止${pid:+ PID ${pid}}..."
+  if screen_session_exists; then
+    screen -S "$SCREEN_SESSION" -X quit >/dev/null 2>&1 || true
+  elif pid_is_running "$pid"; then
+    kill "$pid"
+  fi
+
+  for _ in {1..30}; do
+    if ! pid_is_running "$pid" && ! screen_session_exists; then
+      rm -f "$PID_FILE"
+      say "已停止"
+      return
+    fi
+    sleep 0.2
+  done
+
+  [[ -z "$pid" ]] || kill -9 "$pid" 2>/dev/null || true
+  rm -f "$PID_FILE"
+  say "已停止"
+}
+
+show_status() {
+  local pid
+
+  pid="$(saved_pid || true)"
+  if service_is_ready; then
+    [[ -n "$pid" ]] || pid="$(listener_pid || true)"
+    say "运行中${pid:+（PID ${pid}）}"
+    say "主页：$HOME_URL"
+    return
+  fi
+
+  if pid_is_running "$pid"; then
+    say "进程存在（PID ${pid}），但服务尚未就绪"
+    return 1
+  fi
+
+  say "未运行"
+  return 1
+}
+
+run_foreground() {
+  local existing_pid
+
+  existing_pid="$(listener_pid || true)"
+  [[ -z "$existing_pid" ]] || fail "端口 $PORT 已被 PID $existing_pid 占用"
+  ensure_redis
+  build_if_needed
+  say "以前台方式运行，按 Ctrl+C 停止"
+  cd "$PROJECT_DIR"
+  exec env \
+    REDIS_ADDRESS="$REDIS_ADDRESS" \
+    PORT="$PORT" \
+    SERVER_ADDRESS="$SERVER_ADDRESS" \
+    "$BINARY"
+}
+
+show_help() {
+  cat <<'EOF'
+用法：wzj_signin [命令]
+
+命令：
+  start     后台启动并打开主页（默认）
+  stop      停止服务
+  restart   重启服务
+  status    查看运行状态
+  logs      持续查看运行日志
+  open      在浏览器中打开主页
+  run       在前台运行，按 Ctrl+C 停止
+  help      显示帮助
+
+可选环境变量：
+  PORT=8081
+  REDIS_ADDRESS=127.0.0.1:6379
+  SERVER_ADDRESS=http://localhost:8081
+  WZJ_OPEN_BROWSER=0
+EOF
+}
+
+case "${1:-start}" in
+  start)
+    start_service
+    ;;
+  stop)
+    stop_service
+    ;;
+  restart)
+    stop_service
+    start_service
+    ;;
+  status)
+    show_status
+    ;;
+  logs)
+    mkdir -p "$RUNTIME_DIR"
+    touch "$LOG_FILE"
+    tail -n 100 -f "$LOG_FILE"
+    ;;
+  open)
+    open "$HOME_URL"
+    ;;
+  run)
+    run_foreground
+    ;;
+  help|-h|--help)
+    show_help
+    ;;
+  *)
+    show_help
+    fail "未知命令：$1"
+    ;;
+esac

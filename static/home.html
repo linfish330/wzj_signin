@@ -4,7 +4,7 @@
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>主页 · 微助教 OpenID 监控</title>
-		<link rel="stylesheet" href="/static/app.css?v=20260622_06" />
+		<link rel="stylesheet" href="/static/app.css?v=20260623_04" />
 	</head>
 	<body data-page="home">
 		<div class="shell">
@@ -13,10 +13,10 @@
 					<div class="brand" title="WZJ">W</div>
 
 					<div class="nav" aria-label="Navigation">
-						<a class="navbtn" href="/home" data-page="home" title="主页">🏠</a>
-						<a class="navbtn" href="/submit" data-page="submit" title="提交">➕</a>
-						<a class="navbtn" href="/history" data-page="remind" title="历史">🕘</a>
-						<a class="navbtn" href="/settings" data-page="settings" title="设置">⚙️</a>
+						<a class="navbtn" href="/home" data-page="home" title="主页" aria-label="主页"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-home"></use></svg></a>
+						<a class="navbtn" href="/submit" data-page="submit" title="提交" aria-label="提交"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-plus"></use></svg></a>
+						<a class="navbtn" href="/history" data-page="remind" title="历史" aria-label="历史"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-clock"></use></svg></a>
+						<a class="navbtn" href="/settings" data-page="settings" title="设置" aria-label="设置"><svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-settings"></use></svg></a>
 					</div>
 
 					<div class="sidebar-spacer"></div>
@@ -30,7 +30,7 @@
 						</div>
 						<div class="actions">
 							<div class="search" role="search">
-								<span aria-hidden="true">🔎</span>
+								<svg class="icon" aria-hidden="true"><use href="/static/icons.svg#icon-search"></use></svg>
 								<input type="text" placeholder="搜索（未启用）" autocomplete="off" aria-label="搜索" />
 							</div>
 							<button class="pill primary" id="quickNoticeBtn" type="button">使用说明</button>
@@ -75,11 +75,11 @@
 									<div class="label" style="font-size: 12px; color: var(--muted)">近 7 天签到提醒次数</div>
 									<div
 										id="statChart"
-										style="margin-top: 10px; display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; align-items: end; height: 92px"
+										style="margin-top: 8px; display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; align-items: end; height: 66px"
 									></div>
 									<div
 										id="statChartLabels"
-										style="margin-top: 8px; display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; font-size: 11px; color: var(--muted); text-align: center"
+										style="margin-top: 6px; display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; font-size: 11px; color: var(--muted); text-align: center"
 									></div>
 								</div>
 							</div>
@@ -126,7 +126,7 @@
 								</div>
 
 								<div class="qrMeta">
-									<div>状态：<span id="homeQrStatus">保持主页打开或点击开始轮询</span></div>
+									<div>状态：<span id="homeQrStatus">存在有效 OpenID 时自动轮询</span></div>
 									<div>二维码剩余：<span id="homeQrCountdown">--</span></div>
 								</div>
 								<div class="progress"><div class="bar" id="homeQrProgressBar"></div></div>
@@ -135,18 +135,11 @@
 									<div>类型：<span class="mono" id="homeLastSignType">--</span></div>
 									<div>时间：<span class="mono" id="homeLastSignTime">--</span></div>
 									<div>课程：<span class="mono" id="homeLastSignCourse">--</span></div>
-									<div>openId：<span class="mono" id="homeQrOpenId">--</span></div>
-									<div>signId：<span class="mono" id="homeQrSignId">--</span></div>
-									<div>courseId：<span class="mono" id="homeQrCourseId">--</span></div>
 									<div>排名：<span class="mono" id="homeLastSignRank">--</span></div>
 								</div>
-								<div class="hint mono qrLinkText" id="homeQrLink">（二维码链接会显示在这里）</div>
 
 								<div class="small-actions">
-									<button class="pill primary" id="homeQrStartPollBtn" type="button">开始轮询</button>
-									<button class="pill" id="homeQrStopPollBtn" type="button">停止轮询</button>
 									<button class="ghost" id="homeQrRefreshBtn" type="button">手动刷新</button>
-									<button class="ghost" id="homeQrCopyBtn" type="button">复制二维码链接</button>
 									<button class="ghost" id="homeQrClearBtn" type="button">清空当前二维码</button>
 								</div>
 								<div class="hint" id="homeQrPollHint" style="margin-top: 10px"></div>
@@ -235,6 +228,6 @@
 				});
 			})();
 		</script>
-		<script src="/static/app.js?v=20260623_02"></script>
+		<script src="/static/app.js?v=20260623_04"></script>
 	</body>
 </html>
