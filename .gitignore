@@ -1,14 +1,40 @@
+# ##############################################################################
+# Git Ignore Configurations
+# ##############################################################################
+
 # Local machine configs / secrets
 /data/*.json
 /data/secrets.json
-/config.yml.bak_*
 /config.yml
+/config.yml.bak_*
 /local/
 
-# Logs
+# Logs & PIDs
 *.log
 /logs/
 /.logs/
 
-# IDE
+# Compile & Build Artifacts
+/wzj_signin
+/wzj_signin.exe
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+/bin/
+
+# IDE / Editor Configurations
 /.idea/
+/.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS metadata
+.DS_Store
+Thumbs.db

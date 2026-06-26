@@ -1,4 +1,4 @@
-﻿package qr
+package qr
 
 import (
 	"encoding/json"

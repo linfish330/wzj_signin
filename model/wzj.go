@@ -1,4 +1,4 @@
-﻿package model
+package model
 
 type SignResultData struct {
 	SignRank    int `json:"signRank"`
