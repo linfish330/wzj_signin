@@ -1,85 +1,96 @@
-﻿# 微助教签到助手
+# 微助教签到助手 (wzj_signin)
 
-一个运行在本机/服务器上的小工具：通过 Web 页面管理 OpenID 监控，自动轮询可签到列表。
+一个运行在本机或服务器上的微助教 (TeacherMate) 辅助工具。通过精致的 Web 页面管理微信 OpenID 监控，自动轮询并自动完成可签到列表。
 
-本项目基于上游仓库演进（上游地址：https://github.com/Azuka753/wzj_sign_public）。
+本项目基于上游仓库演进（上游地址：[Azuka753/wzj_sign_public](https://github.com/Azuka753/wzj_sign_public)），并进行了深度的体验升级与功能重构。
 
-## 免责声明
+---
 
-- 本项目与“微助教 / teachermate”无任何关联。
-- 请在遵守所在组织/课程/平台规则的前提下使用。
+## 🎨 视觉与交互重构 (Zhijian Design 风格)
 
-## 功能
+本项目引入了全新的 **Zhijian Design** 视觉体系，为原本单调的签到监控工具带来了极具现代感和高级感的界面：
+- **卡片式玻璃拟态**：界面元素采用毛玻璃与深色渐变微光，色彩搭配高雅和谐。
+- **可视化轮询与延迟机制**：在设置页内嵌直观的三步骤流程图（扫描探测 ➔ 拟真延迟 ➔ 防刷提交），带有多态动效（雷达扫描、沙漏、呼吸灯）以及一键运行测试动画。
+- **表格化 GPS 标签管理**：废弃了凌乱的徽章标签，改用响应式的精致数据表格，支持按行清晰查看经纬度并快速删除或管理。
+- **全局微动效**：按钮悬停抖动、输入框外发光、运行状态呼吸灯，让操作更加富有生命力。
 
-- 自动轮询 OpenID 的可签到列表（按 `app.interval` 秒）
-- 普通签到 / GPS 签到 / 二维码签到提醒
-- 二维码签到：触发后可发送邮件，并提供二维码页面（自动更新二维码）
-- Web 页面：`/home`、`/submit`、`/history`、`/settings`
-- 本机数据持久化（默认在 `data/` 目录）
+---
 
-## 运行前准备
+## ✨ 核心功能
 
-- Go 1.20+（本机运行时需要）
-- Redis（本机或局域网均可）
+- **自动化监控轮询**：周期性扫描 OpenID 待签到列表，轮询间隔可精准调节（1-3600秒）。
+- **多种签到类型支持**：
+  - **普通签到 & GPS 签到**：自动完成，并在 GPS 提交时对经纬度施加微小的物理随机抖动（Jittering），防止因定位千篇一律而被风控判定为防刷。
+  - **二维码签到**：检测到二维码签到后，自动生成本地轮询刷新的二维码页面，并通过邮件通知您，扫码后自动提交。
+- **人性化拟真延迟**：支持在探测到签到任务后，模拟等待设定秒数再提交，贴合真人手动操作逻辑。
+- **数据本地化与安全隔离**：敏感配置（如邮箱 SMTP 密码、Redis 密码）自动隔离开并存储于本地的 `data/secrets.json`，不会进入版本控制。
 
-## 快速开始（本机运行，Windows）
+---
 
-1) 启动 Redis
+## 🛠 运行前准备
 
-- 默认读取 `localhost:6379`（可用环境变量 `REDIS_ADDRESS` 覆盖）
+- **Go 1.20+**（若直接在本机编译运行需要）
+- **Redis**（用于存储轮询队列与用户状态数据）
 
-2) 启动服务
+---
 
-```powershell
-go run .
-```
+## 🚀 快速开始
 
-3) 打开页面
+### 方式一：Windows 本机运行
 
-- http://localhost:8080/home
+1. **启动 Redis**
+   - 默认读取 `localhost:6379`（可用环境变量 `REDIS_ADDRESS` 覆盖）。
+2. **启动服务**
+   ```powershell
+   go run .
+   ```
+3. **访问网页**
+   - 打开浏览器访问：[http://localhost:8080/home](http://localhost:8080/home)
 
-## 快速开始（macOS）
+> **端口冲突？**
+> 如果默认的 `8080` 被占用，可使用如下命令更换端口启动：
+> ```powershell
+> $env:PORT=8081
+> $env:SERVER_ADDRESS="http://localhost:8081"
+> go run .
+> ```
+> 也可以直接使用提供的运行脚本：
+> ```powershell
+> powershell -ExecutionPolicy Bypass -File .\scripts\run-local.ps1 -Port 8081
+> ```
 
-安装一次快捷命令：
+---
 
+### 方式二：macOS 本机运行 (推荐)
+
+项目内提供了一个便捷的一键管理脚本。首先安装快捷指令：
 ```bash
 chmod +x scripts/wzj_signin
 ln -sf "$(pwd)/scripts/wzj_signin" ~/.local/bin/wzj_signin
 ```
 
-以后在任意目录运行：
+之后，您可以在系统的任意目录下运行以下命令来管理服务：
+- **启动服务**（自动检查 Redis、编译代码、后台运行并自动打开主页）：
+  ```bash
+  wzj_signin
+  ```
+- **查看状态**：`wzj_signin status`
+- **查看日志**：`wzj_signin logs`
+- **重启服务**：`wzj_signin restart`
+- **停止服务**：`wzj_signin stop`
 
-```bash
-wzj_signin
-```
+---
 
-该命令会检查 Redis、按需构建项目、后台启动服务并打开主页。常用管理命令：
+### 方式三：Docker / Docker Compose 部署
 
-```bash
-wzj_signin status
-wzj_signin logs
-wzj_signin restart
-wzj_signin stop
-```
-
-## Docker 运行
-
-### 方式一：docker-compose（自带 Redis）
-
+#### 1. 使用 docker-compose（推荐，自带独立 Redis 容器）
 ```bash
 docker compose up -d --build
 ```
+- **Web 访问地址**：[http://localhost:18080/home](http://localhost:18080/home)
+- **数据持久化**：默认将 `./data` 目录挂载到容器中，方便持久化配置。
 
-启动后：
-
-- 应用：http://localhost:18080/home
-- Redis：仅供容器内部使用（地址 `redis:6379`，默认不再映射到宿主机端口）
-
-数据持久化：默认使用 `./data` 目录作为绑定挂载。首次运行时 `data/*.json` 可能不存在，保存设置（例如新增 GPS 标签）时会自动创建。
-
-
-### 方式二：纯 Docker（使用外部 Redis）
-
+#### 2. 使用纯 Docker 容器（连接外部 Redis）
 ```bash
 docker build -t wzj-sign:local .
 
@@ -93,81 +104,44 @@ docker run -d \
   wzj-sign:local
 ```
 
-如需使用 `config.yml`：可额外挂载 `-v %CD%/local/config.yml:/app/config.yml:ro`（也可以不提供，直接使用默认值 + 设置页）。
+---
 
+## ⚙️ 配置与数据管理
 
-## 配置与数据（重要）
+### 1. 非敏感配置：`local/config.yml`
+- 提供服务的基本参数设置（如轮询间隔、服务器地址等）。
+- 若本地不存在此文件，启动时会自动以 `examples/config.example.yml` 为模板生成 `local/config.yml`（已加入 `.gitignore`，防止泄露个人配置）。
 
-### 1) 非敏感配置：config.yml（可选）
+### 2. 敏感密码配置：`data/secrets.json`
+- 存放 Redis 密码、邮件 SMTP 授权码等。
+- 格式参考 `examples/secrets.example.json`。在设置页面更新密码时，会安全地直接写入该文件，无需暴露到配置文件中。
 
-不提供 `config.yml` 也能启动（使用默认值）。
+### 3. 数据持久化目录：`data/`
+- `appconfig.json`：前端/服务端的非敏感运行机制配置（轮询间隔、延迟时间等）。
+- `frontend_settings.json`：默认邮箱、已保存的 GPS 标签列表等。
+- `secrets.json`：敏感密码。
 
-推荐把真实配置放在：`local/config.yml`（已被 `.gitignore` 忽略，适合放个人/本机配置）。
+---
 
+## 📖 Web 页面指南
 
-模板文件：`examples/config.example.yml`（复制一份到 `local/config.yml` 再修改）。
+- **`/home` (运行概览)**：展示当前服务的运行状态、正在监控的 OpenID 数量、最近签到成功统计，并提供快速提交 OpenID 的快捷入口。
+- **`/submit` (提交监控)**：用于粘贴 OpenID 或包含 OpenID 的链接，可选择保存的 GPS 标签进行绑定提交。
+- **`/history` (监控中心)**：展示当前正在监控的用户列表，支持一键“开始/暂停轮询”、“查看日志”、“重新打开二维码”。
+- **`/settings` (控制中心)**：
+  - **标签管理**：以精致表格形式添加、删除、检索自定义 GPS 定位。
+  - **邮件提醒**：配置签到通知收件箱与 SMTP 发信设置。
+  - **轮询与延迟控制**：直观配置轮询扫描频率与拟真提交等待时间，并可通过运行动画观察流程。
 
-首次运行时如果检测到你还没有任何 `config.yml`，程序会尝试自动从 `examples/config.example.yml` 生成一份 `local/config.yml` 作为起点（不会覆盖你已有的文件）。
+---
 
-### 2) 敏感配置：data/secrets.json（本机）
+## ⚠️ 免责声明
 
-敏感字段（如 Redis 密码、邮箱 SMTP 密码）不要放在 `config.yml`。
+1. 本项目为开源辅助工具，与“微助教 / TeacherMate”官方及其母公司无任何关联。
+2. 请在遵守学校、班级及相关平台规则的前提下，合理、合规地使用本工具。因非正常使用导致的任何后果由使用者自行承担。
 
-创建文件：`data/secrets.json`（模板：`examples/secrets.example.json`）。
+---
 
-说明：
+## 🙏 致谢
 
-- 启动时会优先读取 `data/secrets.json` 覆盖密码类配置
-- 设置页更新邮箱密码时，也只会写入 `data/secrets.json`（不会回显密码）
-
-### 3) 本机持久化文件（默认在 data/）
-
-- `data/appconfig.json`：UI 配置（不含密码）
-- `data/frontend_settings.json`：默认邮箱、GPS 标签等
-- `data/secrets.json`：敏感信息（密码类）
-
-首次运行时这些 `data/*.json` 可能不存在，程序会自动创建（不会覆盖已有内容）。
-
-## Web 页面说明
-
-- `/settings`：保存默认邮箱、管理 GPS 标签、配置邮件发送与拟真延迟
-- `/submit`：粘贴 OpenID 或包含 openid 的链接，选择 GPS 标签并提交
-- `/home`：运行概览与使用说明
-- `/history`：查看本机记录，开始/停止轮询，可再次打开二维码页面
-
-## 二维码签到（常见坑）
-
-- 二维码签到与 GPS 签到互不影响。
-- 当检测到二维码签到时：
-  - 可发送邮件，邮件链接通常形如：`/static/qr.html?sign=...&course=...`
-  - 二维码页会轮询后端接口获取二维码并自动刷新
-- 扫码后 OpenID 可能会立刻失效；如需继续监控通常需要重新获取新的 OpenID
-
-## 常见问题（Windows）
-
-### 1) 端口被占用
-
-如果 8080 被占用：
-
-```powershell
-$env:PORT=8081
-$env:SERVER_ADDRESS="http://localhost:8081"
-go run .
-```
-
-也可以使用脚本：
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\run-local.ps1 -Port 8081
-```
-
-### 2) config.yml 编码问题
-
-请确保 `config.yml` 为 UTF-8 编码，否则可能出现 `invalid trailing UTF-8 octet`。
-
-> 提示：Windows 上常见端口冲突（例如 Steam 占用 8080、Memurai 占用 6379）。如果你坚持使用 8080/6379，请先关闭对应程序或修改端口映射。
-
-## 致谢
-
-- 上游项目：https://github.com/Azuka753/wzj_sign_public
-
+- 感谢上游项目的开源实现：[Azuka753/wzj_sign_public](https://github.com/Azuka753/wzj_sign_public)。

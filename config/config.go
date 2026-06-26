@@ -18,6 +18,7 @@ const secretsFile = "secrets.json"
 const localDir = "local"
 
 type AppConfig struct {
+	Interval    int        `json:"interval"`
 	NormalDelay int        `json:"normal_delay"`
 	Mail        MailConfig `json:"mail"`
 }
@@ -32,6 +33,7 @@ type MailConfig struct {
 }
 
 type AppConfigForUI struct {
+	Interval    int        `json:"interval"`
 	NormalDelay int        `json:"normal_delay"`
 	Mail        MailConfig `json:"mail"`
 	PasswordSet bool       `json:"passwordSet"`
@@ -55,7 +57,7 @@ func Load() error {
 		viper.SetDefault("redis.password", "")
 		viper.SetDefault("redis.db", 0)
 		viper.SetDefault("app.interval", 8)
-		viper.SetDefault("app.normal_delay", 20)
+		viper.SetDefault("app.normal_delay", 9)
 		viper.SetDefault("app.url", "http://localhost:8080")
 		viper.SetDefault("mail.enabled", false)
 		viper.SetDefault("mail.host", "")
@@ -151,7 +153,8 @@ func ensureLocalFiles() error {
 
 	// Ensure default JSON files exist (do not overwrite).
 	defaultOverrides := AppConfig{
-		NormalDelay: 20,
+		Interval:    8,
+		NormalDelay: 9,
 		Mail: MailConfig{
 			Enabled:  false,
 			Host:     "",
@@ -262,6 +265,7 @@ func GetForUI() (AppConfigForUI, error) {
 		return AppConfigForUI{}, err
 	}
 	cfg := AppConfigForUI{
+		Interval:    viper.GetInt("app.interval"),
 		NormalDelay: viper.GetInt("app.normal_delay"),
 		Mail: MailConfig{
 			Enabled:  viper.GetBool("mail.enabled"),
@@ -318,6 +322,9 @@ func UpdateFromUI(payload AppConfig) (AppConfigForUI, error) {
 }
 
 func applyToViper(cfg AppConfig) {
+	if cfg.Interval > 0 {
+		viper.Set("app.interval", cfg.Interval)
+	}
 	if cfg.NormalDelay > 0 {
 		viper.Set("app.normal_delay", cfg.NormalDelay)
 	}

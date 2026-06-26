@@ -4,7 +4,7 @@
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>主页 · 微助教 OpenID 监控</title>
-		<link rel="stylesheet" href="/static/app.css?v=20260625_02" />
+		<link rel="stylesheet" href="/static/app.css?v=20260625_07" />
 	</head>
 	<body data-page="home">
 		<div class="shell">
@@ -41,7 +41,7 @@
 						<div class="card tint">
 							<h2>概览</h2>
 
-							<div class="split2" style="margin-top: 14px">
+							<div class="split2 overviewStatusGrid" style="margin-top: 10px">
 								<div class="kpi">
 									<div class="label">监控状态</div>
 									<div class="value">运行中</div>
@@ -84,11 +84,13 @@
 								</div>
 							</div>
 
+						</div>
+
+						<div class="stack">
 							<div class="quickSubmit" id="homeQuickSubmit">
 								<div class="quickSubmitHead">
 									<div>
 										<h2>快速填写 OpenID</h2>
-										<p class="sub">粘贴 OpenID 或包含 openid 的链接，GPS 自动使用第一个标签</p>
 									</div>
 									<span class="badge">
 										<span class="dot" id="homeQuickStatusDot"></span>
@@ -105,11 +107,8 @@
 								</form>
 
 								<div class="hint" id="homeQuickGpsHint">默认 GPS：读取中…</div>
-								<div class="hint" id="homeQuickEmailHint">默认邮箱：读取中…</div>
 							</div>
-						</div>
 
-						<div class="stack">
 							<div class="card qrPanel" id="homeQrPanel">
 								<div class="qrPanelHead">
 									<div>
@@ -230,6 +229,6 @@
 				});
 			})();
 		</script>
-		<script src="/static/app.js?v=20260625_01"></script>
+		<script src="/static/app.js?v=20260625_02"></script>
 	</body>
 </html>

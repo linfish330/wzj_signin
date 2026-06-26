@@ -8,7 +8,7 @@ redis:
 
 app:
   interval: 8
-  normal_delay: 20
+  normal_delay: 9
   url: http://localhost:8080
   lat: 23.038859
   lon: 113.399319

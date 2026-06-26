@@ -9,6 +9,7 @@ import (
 )
 
 type appConfigUpdatePayload struct {
+	Interval    int `json:"interval"`
 	NormalDelay int `json:"normal_delay"`
 	Mail        struct {
 		Enabled  bool   `json:"enabled"`
@@ -37,6 +38,7 @@ func UpdateAppConfigHandler(c *gin.Context) {
 	}
 
 	updated := config.AppConfig{
+		Interval:    payload.Interval,
 		NormalDelay: payload.NormalDelay,
 		Mail: config.MailConfig{
 			Enabled:  payload.Mail.Enabled,
@@ -49,6 +51,10 @@ func UpdateAppConfigHandler(c *gin.Context) {
 	}
 
 	// Minimal validation (avoid obviously wrong values)
+	if updated.Interval < 1 || updated.Interval > 3600 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "轮询间隔范围不合法（1-3600 秒）"})
+		return
+	}
 	if updated.NormalDelay < 0 || updated.NormalDelay > 600 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "延迟时间范围不合法（0-600 秒）"})
 		return

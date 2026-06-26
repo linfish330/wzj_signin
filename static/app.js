@@ -881,23 +881,14 @@
 
 	function renderHomeQuickSubmit() {
 		const gpsHint = $id("homeQuickGpsHint");
-		const emailHint = $id("homeQuickEmailHint");
-		if (!gpsHint && !emailHint) return;
+		if (!gpsHint) return;
 
 		const settings = loadSettings();
-		const email = String(settings.defaultEmail || "").trim();
 		const firstGps = getFirstGpsLabel(settings);
 
-		if (gpsHint) {
-			gpsHint.textContent = firstGps
-				? `默认 GPS：${firstGps.label} · ${firstGps.location}`
-				: "默认 GPS：未配置，请先到设置页添加至少一个 GPS 标签";
-		}
-		if (emailHint) {
-			emailHint.textContent = email
-				? `默认邮箱：${email}`
-				: "默认邮箱：未配置，请先到设置页保存默认邮箱";
-		}
+		gpsHint.textContent = firstGps
+			? `默认 GPS：${firstGps.label} · ${firstGps.location}`
+			: "默认 GPS：未配置，请先到设置页添加至少一个 GPS 标签";
 	}
 
 	function setHelpText() {
@@ -951,24 +942,50 @@
 		}
 	}
 
+	function deleteGpsLabel(idx) {
+		const settings = loadSettings();
+		if (Array.isArray(settings.gpsLabels) && settings.gpsLabels[idx]) {
+			settings.gpsLabels.splice(idx, 1);
+			saveSettings(settings);
+			saveFrontendSettingsToServer(settings);
+			renderAll();
+			openModal("GPS 标签已删除。");
+		}
+	}
+
 	function renderSettings() {
 		const defaultEmailInput = $id("defaultEmail");
-		const gpsLabelList = $id("gpsLabelList");
-		if (!defaultEmailInput && !gpsLabelList) return;
+		const gpsLabelTableBody = $id("gpsLabelTableBody");
+		if (!defaultEmailInput && !gpsLabelTableBody) return;
 
 		const settings = loadSettings();
 		if (defaultEmailInput) defaultEmailInput.value = settings.defaultEmail || "";
 
-		if (gpsLabelList) {
-			gpsLabelList.innerHTML = "";
-			settings.gpsLabels.forEach((it) => {
+		if (gpsLabelTableBody) {
+			gpsLabelTableBody.innerHTML = "";
+			const labels = Array.isArray(settings.gpsLabels) ? settings.gpsLabels : [];
+			if (labels.length === 0) {
+				gpsLabelTableBody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--color-text-muted); padding: 14px;">暂无 GPS 标签，请在上方添加。</td></tr>`;
+				return;
+			}
+			labels.forEach((it, idx) => {
 				const label = it && it.label ? String(it.label) : "";
 				const location = it && it.location ? String(it.location) : "";
 				if (!label || !location) return;
-				const row = document.createElement("div");
-				row.className = "badge";
-				row.innerHTML = `<span class="dot"></span><span><strong>${label}</strong> <span class="mono">${location}</span></span>`;
-				gpsLabelList.appendChild(row);
+				const tr = document.createElement("tr");
+				tr.innerHTML = `
+					<td><strong>${label}</strong></td>
+					<td><span class="mono">${location}</span></td>
+					<td style="text-align: center;">
+						<button class="btn-link-danger" type="button">删除</button>
+					</td>
+				`;
+				
+				const delBtn = tr.querySelector(".btn-link-danger");
+				delBtn.addEventListener("click", () => {
+					deleteGpsLabel(idx);
+				});
+				gpsLabelTableBody.appendChild(tr);
 			});
 		}
 	}
@@ -1372,7 +1389,9 @@
 		}
 
 		const saveServerConfigBtn = $id("saveServerConfigBtn");
+		const saveMechanismConfigBtn = $id("saveMechanismConfigBtn");
 		const normalDelay = $id("normalDelay");
+		const appInterval = $id("appInterval");
 		const mailEnabled = $id("mailEnabled");
 		const mailHost = $id("mailHost");
 		const mailPort = $id("mailPort");
@@ -1390,6 +1409,9 @@
 				if (!data) return;
 
 				normalDelay.value = typeof data.normal_delay === "number" ? String(data.normal_delay) : "";
+				if (appInterval) {
+					appInterval.value = typeof data.interval === "number" ? String(data.interval) : "";
+				}
 				if (mailEnabled) {
 					mailEnabled.value = data.mail && data.mail.enabled ? "on" : "off";
 				}
@@ -1414,54 +1436,154 @@
 			if (ok) renderAll();
 		});
 
-		if (saveServerConfigBtn) {
-			saveServerConfigBtn.addEventListener("click", async () => {
-				try {
-					const delayVal = normalDelay ? Number(normalDelay.value || 0) : 0;
-					if (!Number.isFinite(delayVal) || delayVal < 0 || delayVal > 600) {
-						openModal("延迟时间范围不合法（0-600 秒）。");
-						return;
-					}
-
-					const portVal = mailPort && String(mailPort.value).trim() !== "" ? Number(mailPort.value) : 0;
-					if (!Number.isFinite(portVal) || portVal < 0 || portVal > 65535) {
-						openModal("邮件端口范围不合法（0-65535）。");
-						return;
-					}
-
-					const payload = {
-						normal_delay: delayVal,
-						mail: {
-							enabled: mailEnabled ? mailEnabled.value === "on" : false,
-							host: mailHost ? String(mailHost.value || "").trim() : "",
-							port: portVal,
-							username: mailUsername ? String(mailUsername.value || "").trim() : "",
-							password: mailPassword ? String(mailPassword.value || "") : "",
-							from: mailFrom ? String(mailFrom.value || "").trim() : "",
-						},
-					};
-
-					const resp = await fetch("/api/appconfig", {
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify(payload),
-					});
-					const data = await safeReadJson(resp);
-					if (!resp.ok) {
-						openModal((data && data.error) || "保存失败。请检查输入。");
-						return;
-					}
-
-					if (mailPassword) mailPassword.value = "";
-					if (mailPasswordHint) {
-						mailPasswordHint.textContent = data && data.passwordSet
-							? "已保存（为安全不回显）。留空表示不修改"
-							: "未设置。留空表示不修改";
-					}
-					openModal("服务端配置已保存，并已立即生效。\n（密码留空表示不修改已保存的密码）");
-				} catch {
-					openModal("保存失败：网络或服务异常。");
+		async function submitServerConfig() {
+			try {
+				const delayVal = normalDelay ? Number(normalDelay.value || 0) : 0;
+				if (!Number.isFinite(delayVal) || delayVal < 0 || delayVal > 600) {
+					openModal("延迟时间范围不合法（0-600 秒）。");
+					return;
 				}
+
+				const intervalVal = appInterval ? Number(appInterval.value || 8) : 8;
+				if (!Number.isFinite(intervalVal) || intervalVal < 1 || intervalVal > 3600) {
+					openModal("轮询间隔范围不合法（1-3600 秒）。");
+					return;
+				}
+
+				const portVal = mailPort && String(mailPort.value).trim() !== "" ? Number(mailPort.value) : 0;
+				if (!Number.isFinite(portVal) || portVal < 0 || portVal > 65535) {
+					openModal("邮件端口范围不合法（0-65535）。");
+					return;
+				}
+
+				const payload = {
+					interval: intervalVal,
+					normal_delay: delayVal,
+					mail: {
+						enabled: mailEnabled ? mailEnabled.value === "on" : false,
+						host: mailHost ? String(mailHost.value || "").trim() : "",
+						port: portVal,
+						username: mailUsername ? String(mailUsername.value || "").trim() : "",
+						password: mailPassword ? String(mailPassword.value || "") : "",
+						from: mailFrom ? String(mailFrom.value || "").trim() : "",
+					},
+				};
+
+				const resp = await fetch("/api/appconfig", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify(payload),
+				});
+				const data = await safeReadJson(resp);
+				if (!resp.ok) {
+					openModal((data && data.error) || "保存失败。请检查输入。");
+					return;
+				}
+
+				if (mailPassword) mailPassword.value = "";
+				if (mailPasswordHint) {
+					mailPasswordHint.textContent = data && data.passwordSet
+						? "已保存（为安全不回显）。留空表示不修改"
+						: "未设置。留空表示不修改";
+				}
+				openModal("服务端配置已保存，并已立即生效。\n（密码留空表示不修改已保存的密码）");
+			} catch {
+				openModal("保存失败：网络或服务异常。");
+			}
+		}
+
+		if (saveServerConfigBtn) {
+			saveServerConfigBtn.addEventListener("click", submitServerConfig);
+		}
+
+		if (saveMechanismConfigBtn) {
+			saveMechanismConfigBtn.addEventListener("click", submitServerConfig);
+		}
+
+		// 轮询与延迟可视化流程动画演示
+		const runTestBtn = $id("runTestBtn");
+		const stepPoll = $id("step-poll");
+		const stepDelay = $id("step-delay");
+		const stepSubmit = $id("step-submit");
+		const connector1 = $id("connector-1");
+		const connector2 = $id("connector-2");
+		const submitStatusBadge = $id("submit-status-badge");
+		
+		const cardPoll = $id("card-poll");
+		const cardDelay = $id("card-delay");
+		const cardSubmit = $id("card-submit");
+
+		if (runTestBtn) {
+			runTestBtn.addEventListener("click", () => {
+				runTestBtn.disabled = true;
+				
+				// 1. 重置所有节点与卡片状态
+				const elements = [stepPoll, stepDelay, stepSubmit, connector1, connector2, cardPoll, cardDelay, cardSubmit];
+				elements.forEach(el => {
+					if (el) {
+						el.classList.remove("active", "animating", "success");
+					}
+				});
+				if (submitStatusBadge) {
+					submitStatusBadge.textContent = "就绪";
+					submitStatusBadge.className = "status-badge";
+				}
+
+				// 2. 第一步：扫描探测
+				setTimeout(() => {
+					if (stepPoll) stepPoll.classList.add("active", "animating");
+					if (cardPoll) cardPoll.classList.add("active", "animating");
+					if (submitStatusBadge) {
+						submitStatusBadge.textContent = "正在扫描...";
+						submitStatusBadge.classList.add("info");
+					}
+
+					// 3. 连接线 1 填充
+					setTimeout(() => {
+						if (stepPoll) stepPoll.classList.remove("animating");
+						if (cardPoll) cardPoll.classList.remove("animating");
+						if (connector1) connector1.classList.add("active");
+
+						// 4. 第二步：拟真等待
+						setTimeout(() => {
+							if (stepDelay) stepDelay.classList.add("active", "animating");
+							if (cardDelay) cardDelay.classList.add("active", "animating");
+							if (submitStatusBadge) {
+								submitStatusBadge.textContent = "等待延迟中...";
+								submitStatusBadge.className = "status-badge warning";
+							}
+
+							// 5. 连接线 2 填充
+							setTimeout(() => {
+								if (stepDelay) stepDelay.classList.remove("animating");
+								if (cardDelay) cardDelay.classList.remove("animating");
+								if (connector2) connector2.classList.add("active");
+
+								// 6. 第三步：抖动提交并成功
+								setTimeout(() => {
+									if (stepSubmit) stepSubmit.classList.add("active", "animating", "success");
+									if (cardSubmit) cardSubmit.classList.add("active", "animating", "success");
+									if (submitStatusBadge) {
+										submitStatusBadge.textContent = "已提交 & 成功";
+										submitStatusBadge.className = "status-badge success";
+									}
+
+									// 7. 动画完成，恢复按钮
+									setTimeout(() => {
+										if (stepSubmit) stepSubmit.classList.remove("animating");
+										if (cardSubmit) cardSubmit.classList.remove("animating");
+										runTestBtn.disabled = false;
+									}, 1500);
+
+								}, 800); // 连线 2 动画等待
+
+							}, 2500); // 步骤 2 拟真等待时长（加速演示）
+
+						}, 800); // 连线 1 动画等待
+
+					}, 1500); // 步骤 1 探测时长
+
+				}, 100);
 			});
 		}
 	}

@@ -1,4 +1,4 @@
-﻿package main
+package main
 
 import (
 	"time"
@@ -20,11 +20,13 @@ func main() {
 }
 
 func startTimer() {
-	interval := viper.GetInt("app.interval")
-	ticker := time.NewTicker(time.Duration(interval) * time.Second)
-	defer ticker.Stop()
+	for {
+		interval := viper.GetInt("app.interval")
+		if interval < 1 {
+			interval = 8
+		}
+		time.Sleep(time.Duration(interval) * time.Second)
 
-	for range ticker.C {
 		for _, openId := range db.RedisGetAllMatchedKeys("wzj:user:*") {
 			openId := openId[9:]
 			signList, _ := service.GetAllSigns(openId)
