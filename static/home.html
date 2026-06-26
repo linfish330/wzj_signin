@@ -4,7 +4,7 @@
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>主页 · 微助教 OpenID 监控</title>
-		<link rel="stylesheet" href="/static/app.css?v=20260623_04" />
+		<link rel="stylesheet" href="/static/app.css?v=20260625_02" />
 	</head>
 	<body data-page="home">
 		<div class="shell">
@@ -37,7 +37,7 @@
 						</div>
 					</div>
 
-					<section class="pageGrid">
+					<section class="pageGrid homePageGrid">
 						<div class="card tint">
 							<h2>概览</h2>
 
@@ -119,10 +119,17 @@
 									<span class="badge">监控中：<span id="homeQrMonitorCount">0</span></span>
 								</div>
 
-								<div class="qrStage" id="homeQrStage" style="margin-top: 14px">
-									<div class="spinner small" id="homeQrSpinner" aria-label="Loading"></div>
-									<div class="qrEmpty" id="homeQrEmpty">暂无二维码</div>
-									<img id="homeQrImage" class="qrPreview" alt="扫描此二维码签到" />
+								<div class="qrControlsRow">
+									<div class="qrStage" id="homeQrStage">
+										<div class="spinner small" id="homeQrSpinner" aria-label="Loading"></div>
+										<div class="qrEmpty" id="homeQrEmpty">暂无二维码</div>
+										<img id="homeQrImage" class="qrPreview" alt="扫描此二维码签到" />
+									</div>
+
+									<div class="qrActionButtons">
+										<button class="ghost" id="homeQrRefreshBtn" type="button">手动刷新</button>
+										<button class="ghost" id="homeQrClearBtn" type="button">清空当前二维码</button>
+									</div>
 								</div>
 
 								<div class="qrMeta">
@@ -136,11 +143,6 @@
 									<div>时间：<span class="mono" id="homeLastSignTime">--</span></div>
 									<div>课程：<span class="mono" id="homeLastSignCourse">--</span></div>
 									<div>排名：<span class="mono" id="homeLastSignRank">--</span></div>
-								</div>
-
-								<div class="small-actions">
-									<button class="ghost" id="homeQrRefreshBtn" type="button">手动刷新</button>
-									<button class="ghost" id="homeQrClearBtn" type="button">清空当前二维码</button>
 								</div>
 								<div class="hint" id="homeQrPollHint" style="margin-top: 10px"></div>
 							</div>
@@ -228,6 +230,6 @@
 				});
 			})();
 		</script>
-		<script src="/static/app.js?v=20260623_04"></script>
+		<script src="/static/app.js?v=20260625_01"></script>
 	</body>
 </html>
