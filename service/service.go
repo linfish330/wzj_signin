@@ -178,15 +178,15 @@ func Signin(sign model.SignData, openId string) {
 		lat = userLat
 		lon = userLon
 		log.Printf("[%d] Using User GPS: %s (Lat: %f, Lon: %f)", randomNum, openId, lat, lon)
-	} else {
+	} else if lat != 0 && lon != 0 {
 		log.Printf("[%d] Using Default GPS (Lat: %f, Lon: %f)", randomNum, lat, lon)
-	}
-
-	// 如果都没配置，防止报错，给一个默认值
-	if lat == 0 || lon == 0 {
-		// 采用之前硬编码的徐州默认值或你希望的任意值
-		lat = 34.212723
-		lon = 117.142737
+	} else {
+		// 未指定 GPS 坐标，随机生成一个范围在中国的坐标
+		// 纬度 Lat: 22.0 到 40.0
+		// 经度 Lon: 100.0 到 122.0
+		lat = 22.0 + r.Float64()*18.0
+		lon = 100.0 + r.Float64()*22.0
+		log.Printf("[%d] No GPS coordinate filled. Randomly generated GPS (Lat: %f, Lon: %f)", randomNum, lat, lon)
 	}
 
 	// 坐标随机抖动 (防封号关键，参考了你的 checkin.go 逻辑)

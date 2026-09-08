@@ -13,9 +13,9 @@
 
 	const HELP_TEXT =
 		"快速开始\n" +
-		"1. 设置默认邮箱（用于通知）\n" +
-		"2. 设置 GPS 标签（标签名 + 坐标）\n" +
-		"3. 提交页：选择 GPS 标签 + 填 OpenID 并提交\n" +
+		"1. 设置默认邮箱（可选，用于通知）\n" +
+		"2. 设置 GPS 标签（可选，不设置每次 GPS 签到时随机生成坐标）\n" +
+		"3. 提交页：选择 GPS 标签（可选） + 填 OpenID 并提交\n" +
 		"4. 当前存在 OpenID 时会自动轮询，出现二维码签到会显示在主页二维码区域\n" +
 		"5. 历史页可查看记录并再次打开二维码页面\n\n" +
 		"注意\n" +
@@ -840,14 +840,13 @@
 			statChart.appendChild(empty);
 		}
 
-		counts.forEach((c, idx) => {
 			const bar = document.createElement("div");
 			const h = c === 0 ? 8 : Math.round((c / max) * 52);
 			bar.style.height = `${h}px`;
-			bar.style.borderRadius = "12px";
-			bar.style.border = "1px solid var(--border)";
-			bar.style.background = c === 0 ? "rgba(234, 210, 215, 0.35)" : "rgba(200, 154, 166, 0.22)";
-			bar.style.opacity = c === 0 ? "0.55" : "1";
+			bar.style.borderRadius = "6px";
+			bar.style.border = "1px solid var(--line)";
+			bar.style.background = c === 0 ? "var(--primary-soft)" : "var(--primary)";
+			bar.style.opacity = c === 0 ? "0.6" : "1";
 			bar.title = `${toLocalDateKey(days[idx].getTime())}：${c} 次`;
 			statChart.appendChild(bar);
 
@@ -888,7 +887,7 @@
 
 		gpsHint.textContent = firstGps
 			? `默认 GPS：${firstGps.label} · ${firstGps.location}`
-			: "默认 GPS：未配置，请先到设置页添加至少一个 GPS 标签";
+			: "默认 GPS：未配置（将使用随机生成的坐标进行 GPS 签到）";
 	}
 
 	function setHelpText() {
@@ -896,9 +895,9 @@
 		const quickNoticeBtn = $id("quickNoticeBtn");
 		if (noticeBox) {
 			noticeBox.innerHTML =
-				"1）到【设置】保存默认邮箱（提交时会自动使用）<br />" +
-				"2）到【设置】添加 GPS 标签（标签名 + 经纬度 lng,lat）<br />" +
-				"3）到【提交】粘贴 OpenID/链接，选择 GPS 标签，点击提交<br />" +
+				"1）到【设置】保存默认邮箱（可选，用于通知，不填则不发送邮件）<br />" +
+				"2）到【设置】添加 GPS 标签（可选，不设置每次 GPS 签到时随机生成坐标）<br />" +
+				"3）到【提交】粘贴 OpenID/链接，选择 GPS 标签（可选），点击提交<br />" +
 				"说明：二维码签到（扫码）与 GPS 签到互不影响<br />" +
 				"4）提交后会加入监控池；保持主页打开即可在二维码区域接收提醒<br />" +
 				"5）到【历史】可开始/停止轮询，查看记录，并可再次打开二维码页面<br /><br />" +
@@ -927,7 +926,7 @@
 			gpsLabelSelect.innerHTML = "";
 			const p2 = document.createElement("option");
 			p2.value = "";
-			p2.textContent = "— 选择标签 —";
+			p2.textContent = "— 随机坐标（不指定标签） —";
 			gpsLabelSelect.appendChild(p2);
 
 			settings.gpsLabels.forEach((it, idx) => {
@@ -1009,7 +1008,7 @@
 			const card = document.createElement("div");
 			card.className = "card";
 			card.style.padding = "14px";
-			card.style.background = "rgba(255,255,255,0.76)";
+			card.style.background = "var(--surface)";
 
 			const when = formatTime(e.ts);
 
@@ -1126,18 +1125,6 @@
 				return;
 			}
 
-			if (!email) {
-				setStatus("bad", "请先设置默认邮箱");
-				openModal("提交页已隐藏邮箱输入。请先到“设置”页保存默认邮箱，再回来提交。");
-				return;
-			}
-
-			if (!labelIdx || !gpsLabel || !location) {
-				setStatus("bad", "请选择 GPS 标签");
-				openModal("请选择一个 GPS 标签（在“设置”页创建后可选）。");
-				return;
-			}
-
 			const payload = { openId, value: email, location };
 
 			submitBtn.disabled = true;
@@ -1162,7 +1149,7 @@
 					setStatus("ok", "已提交");
 					rememberEmail(email);
 					rememberLastOpenId(openId);
-					addEvent({ type: "submit", openId, gpsLabel, location: normalizeLocation(location) });
+					addEvent({ type: "submit", openId, gpsLabel: gpsLabel || "随机坐标", location: normalizeLocation(location) });
 
 					await refreshMonitoredOpenIds();
 					startPendingQrPollAll();
@@ -1220,19 +1207,7 @@
 				return;
 			}
 
-			if (!email) {
-				setHomeQuickStatus("bad", "缺少邮箱");
-				openModal("请先到“设置”页保存默认邮箱，再使用首页快速提交。");
-				return;
-			}
-
-			if (!firstGps) {
-				setHomeQuickStatus("bad", "缺少 GPS");
-				openModal("请先到“设置”页添加至少一个 GPS 标签。首页快速提交会自动使用第一个 GPS 标签。");
-				return;
-			}
-
-			const payload = { openId, value: email, location: firstGps.location };
+			const payload = { openId, value: email, location: firstGps ? firstGps.location : "" };
 
 			submitBtn.disabled = true;
 			submitBtn.textContent = "提交中...";
@@ -1259,8 +1234,8 @@
 					addEvent({
 						type: "submit",
 						openId,
-						gpsLabel: firstGps.label,
-						location: firstGps.location,
+						gpsLabel: firstGps ? firstGps.label : "随机坐标",
+						location: firstGps ? firstGps.location : "",
 					});
 					openIdField.value = "";
 					await refreshMonitoredOpenIds();

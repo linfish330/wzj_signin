@@ -9,6 +9,9 @@ import (
 )
 
 func SendEmail(title string, message string, to string) {
+	if to == "" {
+		return
+	}
 	_ = config.Load()
 	mailEnabled := viper.GetBool("mail.enabled")
 	if !mailEnabled {
