@@ -59,6 +59,15 @@
 > powershell -ExecutionPolicy Bypass -File .\scripts\run-local.ps1 -Port 8081
 > ```
 
+也可以安装 `wzj_signin` 终端命令：
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\scripts\install.ps1
+```
+
+安装器会把启动命令写入用户 PATH；请打开新的 PowerShell 窗口后直接运行 `wzj_signin`。该命令需要本机已安装 Go 和 Redis。
+
 ---
 
 ### 方式二：macOS 本机运行 (推荐)
@@ -78,6 +87,15 @@ ln -sf "$(pwd)/scripts/wzj_signin" ~/.local/bin/wzj_signin
 - **查看日志**：`wzj_signin logs`
 - **重启服务**：`wzj_signin restart`
 - **停止服务**：`wzj_signin stop`
+
+也可以使用项目自带安装器完成同样的配置：
+
+```bash
+chmod +x scripts/install.sh
+./scripts/install.sh
+```
+
+如果提示需要配置 PATH，将 `~/.local/bin` 加入 PATH 后重新打开终端；之后可在任意目录运行 `wzj_signin`。脚本会自动检查 Redis、编译服务并打开主页。
 
 ---
 
