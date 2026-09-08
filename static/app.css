@@ -627,6 +627,25 @@ code,
 	margin-bottom: 4px;
 }
 
+/* OpenID 获取与失效规则提示 */
+.importantNotice {
+	border-radius: var(--radius-ctl);
+	border: 1px solid var(--danger);
+	background: var(--danger-soft);
+	padding: 16px;
+	line-height: 1.7;
+}
+
+.importantNotice h2 {
+	color: var(--danger);
+}
+
+.importantNotice p {
+	margin: 6px 0 0;
+	font-size: 12.5px;
+	color: var(--text-2);
+}
+
 /* ============================ KPI 指标面板 ============================ */
 
 .kpi {

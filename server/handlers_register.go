@@ -25,8 +25,8 @@ func RegisterOpenIDHandler(c *gin.Context) {
 	value := registerOpenIdData.Value
 	location := registerOpenIdData.Location
 
-	// OpenID 设定 4 小时过期
-	result := db.RedisSet("wzj:user:"+openId, value, 4*time.Hour)
+	// 微助教 OpenID 最长有效 2 小时；扫码或重新打开页面可能使其更早失效。
+	result := db.RedisSet("wzj:user:"+openId, value, 2*time.Hour)
 	if result.Err() != nil {
 		log.Println("Error setting wzj:user key:", result.Err())
 		return

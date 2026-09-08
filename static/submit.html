@@ -43,11 +43,20 @@
 							<h2>登记信息</h2>
 							<p class="sub">支持直接粘贴包含 openid 的 URL</p>
 
+							<div class="importantNotice" role="note" aria-label="OpenID 获取与失效提醒" style="margin-top: 14px">
+								<h2>重要：按顺序获取并提交 OpenID</h2>
+								<p>1）在微助教学生页面完全加载出来<strong>之前</strong>，点击右上角三个点，选择“到浏览器打开”。</p>
+								<p>2）在新链接中找到 <code>openid</code> 字段，只复制 32 位 OpenID 的值；先在【设置】填入并保存自己的邮箱，再回到这里提交。</p>
+								<p><strong>3）所有 OpenID 最长只有 2 小时有效。</strong>提交完成后不要再次打开任何微助教页面，否则原 OpenID 可能会被提前失效。</p>
+								<p>4）普通签到和 GPS 签到成功加入监控后无需继续操作，签到成功会收到邮件提醒。</p>
+								<p>5）二维码签到会立即发送带链接的邮件；打开链接后用微信扫一扫实时更新的二维码。扫码会立即使原 OpenID 失效；若要再次签到，请重新完成以上流程。</p>
+							</div>
+
 							<form id="submitForm" class="form" style="margin-top: 14px">
 								<div class="field">
 									<label for="inputOpenId">OpenID / URL</label>
 									<input id="inputOpenId" name="openId" type="text" placeholder="粘贴 openid 或包含 openid 的链接" autocomplete="off" />
-									<div class="help">系统会自动从链接中提取 openid</div>
+									<div class="help">系统会自动从链接中提取 openid；请确认是 32 位值，并在提交前先保存自己的邮箱</div>
 								</div>
 
 								<div class="field">
@@ -67,7 +76,7 @@
 
 							<div class="badgeRow" style="margin-top: 14px">
 								<span class="badge">监控中：<span id="monitorCount">0</span> 个 OpenID</span>
-								<span class="badge">建议：保持页面常开</span>
+								<span class="badge">提交后不要再打开微助教页面</span>
 							</div>
 						</div>
 

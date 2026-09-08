@@ -143,7 +143,7 @@ func Signin(sign model.SignData, openId string) {
 		serverAddress := effectiveServerAddress()
 		qrPage := serverAddress + "/static/qr.html?sign=" + fmt.Sprint(signId) + "&course=" + fmt.Sprint(courseId) + "&v=" + fmt.Sprint(time.Now().Unix())
 		mail_title := courseName + "正在二维码签到，需要手动完成"
-		mail_content := "立刻点击下方二维码网址（或复制到浏览器打开），使用微信扫一扫完成签到。\n签到完成后之前提交的OpenID可能会立刻失效，如果需要再次监控需要重新添加新的OpenID到监控池。\n二维码页面：" + qrPage
+		mail_content := "立刻点击下方二维码网址（或复制到浏览器打开），使用微信扫一扫完成签到。\n扫码后原 OpenID 会立刻失效；如果需要再次签到或继续监控，请重新获取并提交新的 OpenID。\n二维码页面：" + qrPage
 
 		// 给前端一个可轮询的 pending 提示（方便弹窗/新标签页打开）
 		_ = db.RedisSet("wzj:qr:pending:"+openId, fmt.Sprintf("%d,%d", courseId, signId), 10*time.Minute).Err()
